@@ -21,11 +21,18 @@ export interface Dimensions {
   unit: Unit;
 }
 
-export interface PackagingComponent extends Dimensions {
+export interface PackagingLayer extends Dimensions {
   id: string;
-  materialType: MaterialType;
+  layerName: string;
   packagingType: PackagingType;
+  materialType: MaterialType;
   knownWeight?: number;
+  estimatedWeight: number;
+  matchedReferenceId?: string;
+  matchedReferenceName?: string;
+  confidenceLevel: ConfidenceLevel;
+  estimationMethod: string;
+  warnings: string[];
 }
 
 export interface ReferenceItem {
@@ -49,13 +56,13 @@ export interface Product {
   sku: string;
   dimensions: Dimensions;
   quantity: number;
-  components: PackagingComponent[];
+  layers: PackagingLayer[];
   estimation: EstimationResult;
   createdAt: string;
 }
 
-export interface ComponentEstimate {
-  componentId: string;
+export interface LayerEstimate {
+  layerId: string;
   estimatedWeightPerUnit: number;
   totalWeight: number;
   confidence: ConfidenceLevel;
@@ -72,7 +79,7 @@ export interface EstimationResult {
   packagingTypeBreakdown: Record<string, number>;
   warnings: string[];
   notes: string[];
-  componentEstimates: ComponentEstimate[];
+  layerEstimates: LayerEstimate[];
 }
 
 export interface CompanySettings {
