@@ -1,36 +1,70 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
-import { UserAccount } from '@/types/auth';
-import { getSession, getUsers, initializeAuth, saveSession } from '@/utils/authStorage';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { Session, User } from '@supabase/supabase-js';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 interface AuthValue {
-  user: UserAccount | null;
-  signIn: (email: string, password: string) => void;
-  signOut: () => void;
-  reload: () => void;
+  user: User | null;
+  session: Session | null;
+  loading: boolean;
+  signUp: (email: string, password: string, metadata?: { name?: string; companyName?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
-initializeAuth();
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const loadUser = (): UserAccount | null => {
-    const session = getSession();
-    if (!session) return null;
-    return getUsers().find((u) => u.id === session.userId) ?? null;
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setLoading(false);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const signUp: AuthValue['signUp'] = async (email, password, metadata) => {
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: metadata?.name,
+          company_name: metadata?.companyName,
+        },
+      },
+    });
+    if (error) throw error;
+    return { needsEmailConfirmation: !data.session };
   };
-  const [user, setUser] = useState<UserAccount | null>(loadUser());
 
-  const signIn = (email: string, password: string) => {
-    const account = getUsers().find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!account) throw new Error('Invalid credentials.');
-    saveSession({ userId: account.id });
-    setUser(account);
+  const signIn: AuthValue['signIn'] = async (email, password) => {
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
-  const signOut = () => { saveSession(null); setUser(null); };
-  const reload = () => setUser(loadUser());
+  const signOut = async () => {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
 
-  const value = useMemo(() => ({ user, signIn, signOut, reload }), [user]);
+  const value = useMemo(() => ({ user: session?.user ?? null, session, loading, signUp, signIn, signOut }), [session, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
