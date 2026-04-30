@@ -1,6 +1,6 @@
 # SustainZone EPR Packaging Estimation MVP
 
-Frontend-only MVP built with React + TypeScript + Vite + Tailwind CSS.
+Frontend app built with React + TypeScript + Vite + Tailwind CSS.
 
 ## Run locally
 
@@ -9,12 +9,17 @@ npm install
 npm run dev
 ```
 
-## Scope
+## Optional shared database mode (Supabase)
 
-- No backend
-- No authentication
-- No external APIs
-- localStorage persistence only
-- Multi-step product and packaging wizard
-- Reference library matching and weight estimation
-- Dashboard, products, library, reports, settings
+Create `.env`:
+
+```bash
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+If these variables are missing, the app automatically uses localStorage.
+
+## Deployment guide
+
+See `PRODUCTION_DEPLOYMENT.md` for free production deployment steps (Supabase + Vercel).
