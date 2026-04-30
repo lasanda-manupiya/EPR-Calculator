@@ -9,14 +9,17 @@ import SettingsPage from '@/pages/SettingsPage';
 import { useProducts } from '@/hooks/useProducts';
 import SignInPage from '@/pages/auth/SignInPage';
 import { useAuth } from '@/context/AuthContext';
-import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import UserManagementPage from '@/pages/admin/UserManagementPage';
+import RegisterPage from '@/pages/auth/RegisterPage';
 
 export default function App() {
   const { products, upsertProduct, removeProduct, loading } = useProducts();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+
+  if (authLoading) return <div className='min-h-screen flex items-center justify-center'>Checking session...</div>;
+
   if (!user) {
-    return <Routes><Route path="/sign-in" element={<SignInPage />} /><Route path="/forgot-password" element={<ForgotPasswordPage />} /><Route path="*" element={<Navigate to="/sign-in" replace />} /></Routes>;
+    return <Routes><Route path="/sign-in" element={<SignInPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="*" element={<Navigate to="/sign-in" replace />} /></Routes>;
   }
   if (loading) return <div className='min-h-screen flex items-center justify-center'>Loading data...</div>;
   return <Layout><Routes>

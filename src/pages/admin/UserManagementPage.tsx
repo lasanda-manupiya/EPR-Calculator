@@ -1,40 +1,34 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { createCompanyWithAdmin, createMember, getCompanies, getUsers } from '@/utils/authStorage';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+
+interface AuthUserView {
+  id: string;
+  email: string | null;
+  created_at?: string;
+}
 
 export default function UserManagementPage() {
-  const { user, reload } = useAuth();
-  const [message, setMessage] = useState('');
+  const [users, setUsers] = useState<AuthUserView[]>([]);
   const [error, setError] = useState('');
-  const users = useMemo(() => getUsers(), [message, error]);
-  const companies = useMemo(() => getCompanies(), [message, error]);
 
-  const createCompany = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    try {
-      createCompanyWithAdmin(String(fd.get('companyName')), String(fd.get('adminName')), String(fd.get('adminEmail')), String(fd.get('adminPassword')));
-      e.currentTarget.reset();
-      setMessage('Company and admin created successfully.');
-      setError('');
-      reload();
-    } catch (err) { setError((err as Error).message); setMessage(''); }
-  };
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ error: authError }) => {
+      if (authError) setError(authError.message);
+    });
 
-  const createMemberSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!user) return;
-    const fd = new FormData(e.currentTarget);
-    try {
-      createMember(user, String(fd.get('name')), String(fd.get('email')), String(fd.get('password')));
-      e.currentTarget.reset();
-      setMessage('Member created successfully.');
-      setError('');
-    } catch (err) { setError((err as Error).message); setMessage(''); }
-  };
+    supabase
+      .from('auth_users_view')
+      .select('id,email,created_at')
+      .order('created_at', { ascending: false })
+      .then(({ data, error: tableError }) => {
+        if (tableError) {
+          setError('Supabase Auth users are managed in Authentication → Users. Optional DB view auth_users_view is not available.');
+          return;
+        }
+        setUsers((data ?? []) as AuthUserView[]);
+      });
+  }, []);
 
-  return <div className="space-y-6"><h2 className="text-2xl font-semibold">Access & company management</h2>{message && <p className="text-emerald-700">{message}</p>}{error && <p className="text-red-600">{error}</p>}
-  {user?.role === 'super_admin' && <form onSubmit={createCompany} className="grid md:grid-cols-2 gap-3 bg-white p-5 rounded-2xl shadow"><h3 className="md:col-span-2 font-semibold">Create company + company admin</h3><input name="companyName" required className="border rounded-lg p-2" placeholder="Company name"/><input name="adminName" required className="border rounded-lg p-2" placeholder="Admin full name"/><input type="email" name="adminEmail" required className="border rounded-lg p-2" placeholder="Admin email"/><input type="password" name="adminPassword" required className="border rounded-lg p-2" placeholder="Admin password"/><button className="md:col-span-2 bg-emerald-600 text-white rounded-lg py-2">Create company</button></form>}
-  {(user?.role === 'admin' || user?.role === 'member') && <form onSubmit={createMemberSubmit} className="grid md:grid-cols-2 gap-3 bg-white p-5 rounded-2xl shadow"><h3 className="md:col-span-2 font-semibold">Create member account</h3><input name="name" required className="border rounded-lg p-2" placeholder="Member name"/><input type="email" name="email" required className="border rounded-lg p-2" placeholder="Member email"/><input type="password" name="password" required className="border rounded-lg p-2" placeholder="Member password"/><button className="md:col-span-2 bg-slate-900 text-white rounded-lg py-2">Create member</button></form>}
-  <div className="grid md:grid-cols-2 gap-4"><div className="bg-white rounded-2xl p-4 shadow"><h4 className="font-semibold">Companies ({companies.length})</h4>{companies.map(c=><p key={c.id} className="text-sm mt-2">{c.name}</p>)}</div><div className="bg-white rounded-2xl p-4 shadow"><h4 className="font-semibold">Users ({users.length})</h4>{users.map(u=><p key={u.id} className="text-sm mt-2">{u.name} · {u.role}</p>)}</div></div></div>;
+  return <div className="space-y-6"><h2 className="text-2xl font-semibold">Access management</h2><div className="bg-white p-5 rounded-2xl shadow space-y-3"><p className="text-sm text-slate-700">User accounts are now handled exclusively by Supabase Auth (email/password). New registrations are stored under Supabase Dashboard → Authentication → Users.</p>{error && <p className="text-amber-700 text-sm">{error}</p>}</div><div className="bg-white rounded-2xl p-4 shadow"><h4 className="font-semibold mb-3">Authenticated users {users.length ? `(${users.length})` : ''}</h4>{users.length === 0 ? <p className="text-sm text-slate-500">No user list is exposed to the client by default. To list users in-app, add a secure server endpoint or a protected SQL view populated by an admin workflow.</p> : users.map((u)=><p key={u.id} className="text-sm mt-2">{u.email} · {u.created_at}</p>)}</div></div>;
 }
