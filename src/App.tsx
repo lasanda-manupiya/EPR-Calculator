@@ -13,11 +13,12 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import UserManagementPage from '@/pages/admin/UserManagementPage';
 
 export default function App() {
-  const { products, upsertProduct, removeProduct } = useProducts();
+  const { products, upsertProduct, removeProduct, loading } = useProducts();
   const { user } = useAuth();
   if (!user) {
     return <Routes><Route path="/sign-in" element={<SignInPage />} /><Route path="/forgot-password" element={<ForgotPasswordPage />} /><Route path="*" element={<Navigate to="/sign-in" replace />} /></Routes>;
   }
+  if (loading) return <div className='min-h-screen flex items-center justify-center'>Loading data...</div>;
   return <Layout><Routes>
     <Route path="/" element={<DashboardPage products={products} />} />
     <Route path="/products" element={<ProductsPage products={products} onDelete={removeProduct} />} />

@@ -32,7 +32,7 @@ const newLayer = (n: number): PackagingLayer => ({
 
 const parseCsvRows = (text: string): string[][] => text.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split(',').map((cell) => cell.trim()));
 
-export default function CreateProductPage({ onSave }: { onSave: (p: Product) => void }) {
+export default function CreateProductPage({ onSave }: { onSave: (p: Product) => void | Promise<void> }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(''); const [category, setCategory] = useState(''); const [sku, setSku] = useState(''); const [quantity, setQuantity] = useState(1);
   const [dimensions, setDimensions] = useState({ length: 0, width: 0, height: 0, unit: 'mm' as const });

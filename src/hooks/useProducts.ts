@@ -1,22 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Product } from '@/types';
-import { getProducts, saveProducts } from '@/utils/storage';
+import { loadProducts, removeProductRemote, upsertProductRemote } from '@/utils/cloudStorage';
 
 export const useProducts = () => {
-  const [products, setProducts] = useState<Product[]>(getProducts());
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const upsertProduct = (product: Product) => {
+  useEffect(() => {
+    loadProducts().then((data) => setProducts(data)).finally(() => setLoading(false));
+  }, []);
+
+  const upsertProduct = async (product: Product) => {
     const next = products.some((p) => p.id === product.id)
       ? products.map((p) => (p.id === product.id ? product : p))
-      : [...products, product];
+      : [product, ...products];
     setProducts(next);
-    saveProducts(next);
+    await upsertProductRemote(product);
   };
 
-  const removeProduct = (id: string) => {
+  const removeProduct = async (id: string) => {
     const next = products.filter((p) => p.id !== id);
     setProducts(next);
-    saveProducts(next);
+    await removeProductRemote(id);
   };
 
   const summary = useMemo(() => ({
@@ -24,5 +29,5 @@ export const useProducts = () => {
     totalWeight: products.reduce((s, p) => s + p.estimation.totalPackagingWeight, 0)
   }), [products]);
 
-  return { products, upsertProduct, removeProduct, summary };
+  return { products, upsertProduct, removeProduct, summary, loading };
 };

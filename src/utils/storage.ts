@@ -28,7 +28,7 @@ const normalizeProducts = (raw: unknown): Product[] => {
         }))
       : [];
 
-    return [{ ...(p as Product), layers } as Product];
+    return [{ ...(p as unknown as Product), layers } as Product];
   });
 };
 

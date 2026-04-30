@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MaterialType, PackagingType, ReferenceItem } from '@/types';
-import { getReferenceLibrary, saveReferenceLibrary } from '@/utils/referenceLibraryStorage';
+import { loadReferenceLibrary, saveReferenceLibraryRemote, seedReferenceLibraryIfNeeded } from '@/utils/cloudStorage';
 
 const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
   referenceName: '', materialType: 'Cardboard', packagingType: 'primary', length: 0, width: 0, height: 0, unit: 'mm', averageWeight: 0, notes: ''
@@ -8,19 +8,21 @@ const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
 
 export default function PackagingLibraryPage() {
   const [q, setQ] = useState(''); const [material, setMaterial] = useState(''); const [ptype, setPtype] = useState('');
-  const [items, setItems] = useState<ReferenceItem[]>(() => getReferenceLibrary());
+  const [items, setItems] = useState<ReferenceItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
+  useEffect(() => { seedReferenceLibraryIfNeeded().then(() => loadReferenceLibrary().then(setItems)); }, []);
+
   const filtered = useMemo(() => items.filter(r => (!q || r.referenceName.toLowerCase().includes(q.toLowerCase())) && (!material || r.materialType === material) && (!ptype || r.packagingType === ptype)), [items, q, material, ptype]);
 
-  const persist = (next: ReferenceItem[]) => { setItems(next); saveReferenceLibrary(next); };
-  const submit = () => {
+  const persist = async (next: ReferenceItem[]) => { setItems(next); await saveReferenceLibraryRemote(next); };
+  const submit = async () => {
     const densityValue = form.length && form.width && form.height ? form.averageWeight / (form.length * form.width * form.height) : 0;
     if (editingId) {
-      persist(items.map(i => i.id === editingId ? { ...i, ...form, densityValue } : i));
+      await persist(items.map(i => i.id === editingId ? { ...i, ...form, densityValue } : i));
     } else {
-      persist([...items, { id: crypto.randomUUID(), ...form, densityValue }]);
+      await persist([...items, { id: crypto.randomUUID(), ...form, densityValue }]);
     }
     setEditingId(null); setForm(emptyForm);
   };
