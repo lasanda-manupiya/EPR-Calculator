@@ -104,10 +104,37 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
   };
 
   const verifyExtractedRow = (row: ExtractedRow) => {
+    const rowDimensions = { length: row.length_mm, width: row.width_mm, height: row.height_mm, unit: 'mm' as const };
+    const rowEstimation = estimateProduct({ id: 'draft', name: row.product_name, category, sku, quantity, dimensions: rowDimensions, layers }, referenceLibrary);
+    const rowLayersForSave = layers.map((layer) => {
+      const estimate = rowEstimation.layerEstimates.find((x) => x.layerId === layer.id);
+      return {
+        ...layer,
+        estimatedWeight: estimate?.estimatedWeightPerUnit ?? 0,
+        matchedReferenceId: estimate?.matchedReference?.id,
+        matchedReferenceName: estimate?.matchedReference?.referenceName,
+        confidenceLevel: estimate?.confidence ?? 'Low',
+        estimationMethod: estimate?.method ?? 'No estimate',
+        warnings: estimate?.warning ? [estimate.warning] : [],
+      };
+    });
+
+    onSave({
+      id: crypto.randomUUID(),
+      name: row.product_name,
+      category,
+      sku,
+      quantity,
+      dimensions: rowDimensions,
+      layers: rowLayersForSave,
+      estimation: rowEstimation,
+      createdAt: new Date().toISOString(),
+    });
+
     setName(row.product_name);
-    setDimensions({ length: row.length_mm, width: row.width_mm, height: row.height_mm, unit: 'mm' });
-    setImportMessage(`Verified and applied "${row.product_name}" to the manual form. You can now continue and save.`);
-    setStep(1);
+    setDimensions(rowDimensions);
+    setExtractedRows((prev) => prev.filter((r) => r.id !== row.id));
+    setImportMessage(`Verified, applied, and saved "${row.product_name}". Remaining extracted rows are still available below.`);
   };
 
   const layeredForSave = layers.map((l) => {
