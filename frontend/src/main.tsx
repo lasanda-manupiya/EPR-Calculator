@@ -28,7 +28,7 @@ const useAuth = () => useContext(Auth);
 const Card = ({ children }: { children: any }) => <div className='bg-white p-4 rounded-xl shadow'>{children}</div>;
 
 const Layout = ({ children }: { children: any }) => {
-  const { logout, isPreview } = useAuth();
+  const { isPreview } = useAuth();
   return (
     <div className='min-h-screen flex'>
       <aside className='w-64 bg-brand text-white p-4 space-y-2'>
@@ -39,52 +39,8 @@ const Layout = ({ children }: { children: any }) => {
             {p.slice(1).replace(/^./, (c) => c.toUpperCase())}
           </Link>
         ))}
-        <button onClick={logout}>Log out</button>
       </aside>
       <main className='flex-1 p-6'>{children}</main>
-    </div>
-  );
-};
-
-const Login = () => {
-  const { setToken, setPreview } = useAuth();
-  const nav = useNavigate();
-  const [email, setEmail] = useState('demo@sustainzone.co.uk');
-  const [password, setPassword] = useState('DemoPass123!');
-
-  return (
-    <div className='max-w-md mx-auto mt-24'>
-      <Card>
-        <h2>Log in</h2>
-        <input className='border p-2 w-full my-2' value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input type='password' className='border p-2 w-full my-2' value={password} onChange={(e) => setPassword(e.target.value)} />
-        <div className='flex flex-wrap gap-2 mt-2'>
-          <button
-            className='bg-brand text-white px-4 py-2'
-            onClick={async () => {
-              const r = await api.post('/auth/login', { email, password });
-              setPreview(false);
-              setToken(r.data.token);
-              nav('/dashboard');
-            }}
-          >
-            Sign in
-          </button>
-          <button
-            className='bg-gray-200 px-4 py-2 rounded'
-            onClick={() => {
-              setPreview(true);
-              setToken('preview-mode');
-              nav('/dashboard');
-            }}
-          >
-            Continue in preview mode
-          </button>
-          <Link to='/register' className='ml-2 text-brand self-center'>
-            Register
-          </Link>
-        </div>
-      </Card>
     </div>
   );
 };
@@ -156,13 +112,10 @@ const Reports = () => {
 
 const Settings = () => <Layout><Card>Settings</Card></Layout>;
 
-const Protected = ({ children }: { children: any }) => {
-  const { token } = useAuth();
-  return token ? children : <Navigate to='/' />;
-};
+const Protected = ({ children }: { children: any }) => children;
 
 const App = () => {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState('public-access');
   const [isPreview, setPreview] = useState(localStorage.getItem('isPreview') === 'true');
 
   React.useEffect(() => {
@@ -178,7 +131,7 @@ const App = () => {
     return c;
   });
 
-  return <Auth.Provider value={{ token, setToken, isPreview, setPreview, logout: () => { setPreview(false); setToken(null); } }}><BrowserRouter><Routes><Route path='/' element={<Login />} /><Route path='/register' element={<Register />} /><Route path='/dashboard' element={<Protected><Dashboard /></Protected>} /><Route path='/products' element={<Protected><Products /></Protected>} /><Route path='/library' element={<Protected><Library /></Protected>} /><Route path='/reports' element={<Protected><Reports /></Protected>} /><Route path='/settings' element={<Protected><Settings /></Protected>} /></Routes></BrowserRouter></Auth.Provider>;
+  return <Auth.Provider value={{ token, setToken, isPreview, setPreview }}><BrowserRouter><Routes><Route path='/' element={<Navigate to='/dashboard' replace />} /><Route path='/register' element={<Register />} /><Route path='/dashboard' element={<Protected><Dashboard /></Protected>} /><Route path='/products' element={<Protected><Products /></Protected>} /><Route path='/library' element={<Protected><Library /></Protected>} /><Route path='/reports' element={<Protected><Reports /></Protected>} /><Route path='/settings' element={<Protected><Settings /></Protected>} /></Routes></BrowserRouter></Auth.Provider>;
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
