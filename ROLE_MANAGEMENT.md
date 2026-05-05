@@ -1,66 +1,25 @@
-# Role management: Superadmin → Admin → Member
+# Role Management (MVP Multi-tenant)
 
-This project uses three roles in `public.company_admins.role`:
+## Roles
+- `superadmin` (platform): create companies and assign first admin.
+- `admin` (company): invite/manage users in own company only.
+- `member` (company): no user-management permissions.
 
-- `superadmin`: can create companies and promote users to `admin`.
-- `admin`: can manage members in their company.
-- `member`: standard user; cannot add users.
+## Membership model
+- Table: `company_memberships`
+- Role: `superadmin|admin|member`
+- Status: `active|suspended|removed`
 
-## 1) Registration rule (domain restricted)
+## Secure workflows (RPC)
+- `create_company_with_admin(company_name, admin_email, admin_name)`
+- `invite_user_to_company(company_id, email, role)`
+- `update_membership_status(company_id, user_id, status)`
+- `change_membership_role(company_id, user_id, role)`
 
-`supabase/schema.sql` now enforces this at signup trigger level:
+All functions enforce authorization and write `audit_logs` entries.
 
-- Only users with email ending in `@sustainzone.co.uk` can register.
-- Every newly-registered allowed user is automatically assigned `superadmin`.
-
-If a non-`@sustainzone.co.uk` user signs up, signup is rejected with:
-
-- `Only @sustainzone.co.uk users can register.`
-
-## 2) Company must exist before making an admin
-
-An admin row requires `company_id`, so the company must be created first.
-
-Create company:
-
-```sql
-insert into public.companies (name, created_by)
-values ('Acme Ltd', '<superadmin_user_uuid>')
-returning id;
-```
-
-Then promote a user inside that company:
-
-```sql
-update public.company_admins ca
-set role = 'admin'
-from auth.users u
-where ca.user_id = u.id
-  and ca.company_id = '<company_uuid>'
-  and lower(u.email) = 'admin-user@sustainzone.co.uk';
-```
-
-## 3) Add members (admin/superadmin workflow)
-
-Members should remain `member` role:
-
-```sql
-update public.company_admins ca
-set role = 'member'
-from auth.users u
-where ca.user_id = u.id
-  and ca.company_id = '<company_uuid>'
-  and lower(u.email) = 'member-user@sustainzone.co.uk';
-```
-
-## 4) Optional one-time fix for existing records
-
-If existing rows were created before this rule, normalize them:
-
-```sql
-update public.company_admins ca
-set role = 'superadmin'
-from auth.users u
-where ca.user_id = u.id
-  and lower(u.email) like '%@sustainzone.co.uk';
-```
+## Operations checklist
+1. **Onboard company**: superadmin runs create-company flow and sets first admin email.
+2. **Invite users**: company admin uses Access Management to invite admin/member users.
+3. **Offboard users**: set status to `suspended` then `removed` after transfer checks.
+4. **Incident rollback**: review `audit_logs`, revert membership role/status, and rotate impacted sessions.

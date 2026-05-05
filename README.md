@@ -1,29 +1,23 @@
-# SustainZone EPR Packaging Estimation MVP
+# EPR Calculator
 
-Frontend app built with React + TypeScript + Vite + Tailwind CSS.
+## Production-safe tenancy + access model (MVP)
 
-## Run locally
+This app uses explicit role-based, multi-tenant access control with Supabase RLS:
+- Platform `superadmin`
+- Company `admin`
+- Company `member`
 
-```bash
-npm install
-npm run dev
-```
+No role is inferred from email domain.
 
-## Optional shared database mode (Supabase)
+## Setup
+1. Apply `supabase/schema.sql` in Supabase SQL editor.
+2. Ensure auth users are invited through your auth workflow.
+3. Use the app pages:
+   - `/superadmin/companies` for platform company onboarding
+   - `/access-management` for company-level invites and role/status management
+4. Validate with `supabase/verify_role_boundaries.sql`.
 
-Create `.env`:
-
-```bash
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-If these variables are missing, the app automatically uses localStorage.
-
-## Deployment guide
-
-See `PRODUCTION_DEPLOYMENT.md` for free production deployment steps (Supabase + Vercel).
-
-## Role management
-
-See `ROLE_MANAGEMENT.md` for setting up `superadmin`, `admin`, and `member` roles in Supabase.
+## Security notes
+- Sensitive actions are executed via RPC functions with authorization checks.
+- Every sensitive action writes to `audit_logs`.
+- Service role keys remain backend-only.
