@@ -33,7 +33,7 @@ create table if not exists public.company_admins (
   company_id uuid not null references public.companies(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'admin',
+  role text not null default 'member' check (role in ('superadmin', 'admin', 'member')),
   created_at timestamptz not null default now(),
   unique (company_id, user_id)
 );
@@ -84,8 +84,17 @@ begin
   on conflict (name) do update set name = excluded.name
   returning id into created_company_id;
 
+  if lower(new.email) not like '%@sustainzone.co.uk' then
+    raise exception 'Only @sustainzone.co.uk users can register.';
+  end if;
+
   insert into public.company_admins (company_id, user_id, full_name, role)
-  values (created_company_id, new.id, target_name, 'admin')
+  values (
+    created_company_id,
+    new.id,
+    target_name,
+    'superadmin'
+  )
   on conflict (company_id, user_id) do nothing;
 
   return new;

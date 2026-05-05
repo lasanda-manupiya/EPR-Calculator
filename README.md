@@ -23,3 +23,7 @@ If these variables are missing, the app automatically uses localStorage.
 ## Deployment guide
 
 See `PRODUCTION_DEPLOYMENT.md` for free production deployment steps (Supabase + Vercel).
+
+## Role management
+
+See `ROLE_MANAGEMENT.md` for setting up `superadmin`, `admin`, and `member` roles in Supabase.
