@@ -2,6 +2,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.products (
   id uuid primary key,
+  company_id uuid references public.companies(id) on delete cascade,
   payload jsonb not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -9,6 +10,7 @@ create table if not exists public.products (
 
 create table if not exists public.reference_library (
   id uuid primary key,
+  company_id uuid references public.companies(id) on delete cascade,
   payload jsonb not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -16,6 +18,7 @@ create table if not exists public.reference_library (
 
 create table if not exists public.company_settings (
   id text primary key default 'default',
+  company_id uuid references public.companies(id) on delete cascade,
   payload jsonb not null,
   updated_at timestamptz not null default now()
 );
@@ -38,6 +41,10 @@ create table if not exists public.company_admins (
   unique (company_id, user_id)
 );
 
+alter table public.products add column if not exists company_id uuid references public.companies(id) on delete cascade;
+alter table public.reference_library add column if not exists company_id uuid references public.companies(id) on delete cascade;
+alter table public.company_settings add column if not exists company_id uuid references public.companies(id) on delete cascade;
+
 alter table public.products enable row level security;
 alter table public.reference_library enable row level security;
 alter table public.company_settings enable row level security;
@@ -50,16 +57,95 @@ drop policy if exists "Allow read/write with anon key" on public.company_setting
 drop policy if exists "Allow read/write with anon key" on public.companies;
 drop policy if exists "Allow read/write with anon key" on public.company_admins;
 
-create policy "Allow read/write with anon key" on public.products for all using (true) with check (true);
-create policy "Allow read/write with anon key" on public.reference_library for all using (true) with check (true);
-create policy "Allow read/write with anon key" on public.company_settings for all using (true) with check (true);
+drop policy if exists "Authenticated users can read companies" on public.companies;
+drop policy if exists "Authenticated users can read company admins" on public.company_admins;
 
--- Keep these read-only from the client; population is handled by DB trigger.
-create policy "Authenticated users can read companies" on public.companies
-for select to authenticated using (true);
+create or replace function public.is_superadmin()
+returns boolean language sql stable as $$
+  select exists (
+    select 1 from public.company_admins ca
+    where ca.user_id = auth.uid() and ca.role = 'superadmin'
+  );
+$$;
 
-create policy "Authenticated users can read company admins" on public.company_admins
-for select to authenticated using (true);
+create or replace function public.is_admin_or_superadmin()
+returns boolean language sql stable as $$
+  select exists (
+    select 1 from public.company_admins ca
+    where ca.user_id = auth.uid() and ca.role in ('superadmin', 'admin')
+  );
+$$;
+
+create policy "Products by company, superadmin sees all" on public.products
+for all to authenticated
+using (
+  public.is_superadmin() or company_id in (
+    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  )
+)
+with check (
+  public.is_superadmin() or company_id in (
+    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  )
+);
+
+create policy "Reference library by company, superadmin sees all" on public.reference_library
+for all to authenticated
+using (
+  public.is_superadmin() or company_id in (
+    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  )
+)
+with check (
+  public.is_superadmin() or company_id in (
+    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  )
+);
+
+create policy "Settings by company, superadmin sees all" on public.company_settings
+for all to authenticated
+using (
+  public.is_superadmin() or company_id in (
+    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  )
+)
+with check (
+  public.is_superadmin() or company_id in (
+    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  )
+);
+
+create policy "Companies visible to own company and superadmin" on public.companies
+for select to authenticated using (
+  public.is_superadmin() or id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid())
+);
+
+create policy "Only superadmin can create companies" on public.companies
+for insert to authenticated with check (public.is_superadmin());
+
+create policy "Company admins visible to same company and superadmin" on public.company_admins
+for select to authenticated using (
+  public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid())
+);
+
+create policy "Only superadmin can promote/create admins" on public.company_admins
+for insert to authenticated with check (public.is_superadmin());
+
+create policy "Admin can add members in own company" on public.company_admins
+for update to authenticated
+using (
+  company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid() and ca.role in ('admin','superadmin'))
+)
+with check (
+  (
+    public.is_superadmin()
+    and role in ('superadmin','admin','member')
+  )
+  or (
+    company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid() and ca.role = 'admin')
+    and role = 'member'
+  )
+);
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -72,11 +158,15 @@ declare
   target_name text;
   created_company_id uuid;
 begin
+  if lower(new.email) not like '%@sustainzone.co.uk' then
+    raise exception 'Only @sustainzone.co.uk users can register.';
+  end if;
+
   target_company := nullif(trim(coalesce(new.raw_user_meta_data ->> 'company_name', '')), '');
   target_name := nullif(trim(coalesce(new.raw_user_meta_data ->> 'name', '')), '');
 
   if target_company is null then
-    target_company := 'Unassigned Company';
+    target_company := split_part(new.email, '@', 1) || ' Company';
   end if;
 
   insert into public.companies (name, created_by)
@@ -84,17 +174,8 @@ begin
   on conflict (name) do update set name = excluded.name
   returning id into created_company_id;
 
-  if lower(new.email) not like '%@sustainzone.co.uk' then
-    raise exception 'Only @sustainzone.co.uk users can register.';
-  end if;
-
   insert into public.company_admins (company_id, user_id, full_name, role)
-  values (
-    created_company_id,
-    new.id,
-    target_name,
-    'superadmin'
-  )
+  values (created_company_id, new.id, target_name, 'superadmin')
   on conflict (company_id, user_id) do nothing;
 
   return new;

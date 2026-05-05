@@ -4,6 +4,18 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getProducts, getSettings, saveProducts, saveSettings } from '@/utils/storage';
 import { getReferenceLibrary, saveReferenceLibrary } from '@/utils/referenceLibraryStorage';
 
+const resolveCompanyIdsForCurrentUser = async (): Promise<string[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('company_admins').select('company_id');
+  if (error) throw error;
+  return Array.from(new Set((data ?? []).map((row: { company_id: string }) => row.company_id).filter(Boolean)));
+};
+
+const resolvePrimaryCompanyId = async (): Promise<string | null> => {
+  const ids = await resolveCompanyIdsForCurrentUser();
+  return ids[0] ?? null;
+};
+
 export const loadProducts = async (): Promise<Product[]> => {
   if (!isSupabaseConfigured || !supabase) return getProducts();
   try {
@@ -18,7 +30,9 @@ export const loadProducts = async (): Promise<Product[]> => {
 export const upsertProductRemote = async (product: Product) => {
   saveProducts([product, ...getProducts().filter((p) => p.id !== product.id)]);
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('products').upsert({ id: product.id, payload: product, updated_at: new Date().toISOString() });
+  const companyId = await resolvePrimaryCompanyId();
+  if (!companyId) return;
+  await supabase.from('products').upsert({ id: product.id, company_id: companyId, payload: product, updated_at: new Date().toISOString() });
 };
 
 export const removeProductRemote = async (id: string) => {
@@ -44,7 +58,9 @@ export const saveReferenceLibraryRemote = async (items: ReferenceItem[]) => {
   if (!isSupabaseConfigured || !supabase) return;
   await supabase.from('reference_library').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   if (items.length) {
-    await supabase.from('reference_library').insert(items.map((item) => ({ id: item.id, payload: item, updated_at: new Date().toISOString() })));
+    const companyId = await resolvePrimaryCompanyId();
+    if (!companyId) return;
+    await supabase.from('reference_library').insert(items.map((item) => ({ id: item.id, company_id: companyId, payload: item, updated_at: new Date().toISOString() })));
   }
 };
 
@@ -62,7 +78,9 @@ export const loadSettings = async (): Promise<CompanySettings> => {
 export const saveSettingsRemote = async (settings: CompanySettings) => {
   saveSettings(settings);
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('company_settings').upsert({ id: 'default', payload: settings, updated_at: new Date().toISOString() });
+  const companyId = await resolvePrimaryCompanyId();
+  if (!companyId) return;
+  await supabase.from('company_settings').upsert({ id: 'default', company_id: companyId, payload: settings, updated_at: new Date().toISOString() });
 };
 
 export const seedReferenceLibraryIfNeeded = async () => {
@@ -70,7 +88,9 @@ export const seedReferenceLibraryIfNeeded = async () => {
   try {
     const { data, error } = await supabase.from('reference_library').select('id').limit(1);
     if (error || data?.length) return;
-    await supabase.from('reference_library').insert(defaultReferenceLibrary.map((item) => ({ id: item.id, payload: item })));
+    const companyId = await resolvePrimaryCompanyId();
+    if (!companyId) return;
+    await supabase.from('reference_library').insert(defaultReferenceLibrary.map((item) => ({ id: item.id, company_id: companyId, payload: item })));
   } catch {
     // ignore seeding errors
   }
