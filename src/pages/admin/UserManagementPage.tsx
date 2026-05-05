@@ -1,154 +1,57 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
-interface AuthUserView {
-  id: string;
-  email: string | null;
-  created_at?: string;
-}
-
-interface CompanyOption {
-  id: string;
-  name: string;
-}
+interface Membership { id: string; company_id: string; email: string | null; user_id: string | null; role: 'admin' | 'member' | 'superadmin'; status: 'active' | 'suspended' | 'removed' }
 
 export default function UserManagementPage() {
-  const [users, setUsers] = useState<AuthUserView[]>([]);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const { memberships: myMemberships } = useAuth();
+  const [list, setList] = useState<Membership[]>([]);
   const [companyId, setCompanyId] = useState('');
+  const [email, setEmail] = useState('');
   const [role, setRole] = useState<'admin' | 'member'>('member');
+  const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = async (cid?: string) => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ error: authError }) => {
-      if (authError) setError(authError.message);
-    });
-
-    supabase
-      .from('companies')
-      .select('id,name')
-      .order('name', { ascending: true })
-      .then(({ data }) => {
-        const next = (data ?? []) as CompanyOption[];
-        setCompanies(next);
-        if (next.length) setCompanyId(next[0].id);
-      });
-
-    supabase
-      .from('auth_users_view')
-      .select('id,email,created_at')
-      .order('created_at', { ascending: false })
-      .then(({ data, error: tableError }) => {
-        if (tableError) {
-          setError('Supabase Auth users are managed in Authentication → Users. Optional DB view auth_users_view is not available.');
-          return;
-        }
-        setUsers((data ?? []) as AuthUserView[]);
-      });
-  }, []);
-
-  const onCreateUser = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-
-    if (!supabase) {
-      setError('Supabase auth is not configured.');
-      return;
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password,
-      options: {
-        data: {
-          invited_company_id: companyId,
-          invited_role: role,
-        },
-      },
-    });
-
-    if (signUpError) {
-      setError(signUpError.message);
-      return;
-    }
-
-    const needsEmailConfirmation = !data.session;
-    setMessage(needsEmailConfirmation ? 'User created. They must confirm their email before signing in.' : 'User created successfully.');
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
+    const effective = cid || companyId;
+    if (!effective) return;
+    const { data, error: loadError } = await supabase.from('company_memberships').select('id,company_id,email,user_id,role,status').eq('company_id', effective);
+    if (loadError) setError(loadError.message); else setList((data ?? []) as Membership[]);
   };
 
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">Access management</h2>
+  useEffect(() => { if (myMemberships.length) { setCompanyId(myMemberships[0].company_id); void load(myMemberships[0].company_id); } }, [myMemberships.length]);
 
-      <div className="bg-white p-5 rounded-2xl shadow space-y-3">
-        <p className="text-sm text-slate-700">User accounts are now handled exclusively by Supabase Auth (email/password). New registrations are stored under Supabase Dashboard → Authentication → Users.</p>
-        {error && <p className="text-amber-700 text-sm">{error}</p>}
-        {message && <p className="text-emerald-700 text-sm">{message}</p>}
-      </div>
+  const invite = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const { error: rpcError } = await supabase!.rpc('invite_user_to_company', { p_company_id: companyId, p_email: email, p_role: role });
+    if (rpcError) setError(rpcError.message); else { setEmail(''); await load(); }
+  };
 
-      <div className="bg-white rounded-2xl p-5 shadow space-y-4">
-        <h4 className="font-semibold">Create authenticated user</h4>
-        <p className="text-sm text-slate-600">Create admin/member users for a selected company. Only self-registered superadmins must use @sustainzone.co.uk; invited users can use any domain.</p>
-        <form onSubmit={onCreateUser} className="grid md:grid-cols-3 gap-3">
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="border rounded-lg p-2"
-            placeholder="user@any-domain.com"
-          />
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="border rounded-lg p-2" required>
-            {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-          </select>
-          <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')} className="border rounded-lg p-2">
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
-          <input
-            required
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border rounded-lg p-2"
-            placeholder="Temporary password"
-          />
-          <input
-            required
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="border rounded-lg p-2"
-            placeholder="Confirm password"
-          />
-          <button className="md:col-span-3 bg-slate-900 text-white rounded-lg py-2">Create user</button>
-        </form>
-      </div>
+  const updateStatus = async (userId: string, status: 'active' | 'suspended' | 'removed') => {
+    const { error: rpcError } = await supabase!.rpc('update_membership_status', { p_company_id: companyId, p_user_id: userId, p_status: status });
+    if (rpcError) setError(rpcError.message); else await load();
+  };
 
-      <div className="bg-white rounded-2xl p-4 shadow">
-        <h4 className="font-semibold mb-3">Authenticated users {users.length ? `(${users.length})` : ''}</h4>
-        {users.length === 0 ? (
-          <p className="text-sm text-slate-500">No user list is exposed to the client by default. To list users in-app, add a secure server endpoint or a protected SQL view populated by an admin workflow.</p>
-        ) : (
-          users.map((u) => <p key={u.id} className="text-sm mt-2">{u.email} · {u.created_at}</p>)
-        )}
-      </div>
-    </div>
-  );
+  const updateRole = async (userId: string, nextRole: 'admin' | 'member') => {
+    const { error: rpcError } = await supabase!.rpc('change_membership_role', { p_company_id: companyId, p_user_id: userId, p_role: nextRole });
+    if (rpcError) setError(rpcError.message); else await load();
+  };
+
+  return <div className="space-y-4"><h2 className="text-2xl font-semibold">Company access management</h2>
+    {error && <p className="text-red-600">{error}</p>}
+    <form className="bg-white p-4 rounded-xl shadow grid md:grid-cols-3 gap-2" onSubmit={invite}>
+      <input className="border rounded p-2" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Invite email" required />
+      <select className="border rounded p-2" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')}><option value="member">Member</option><option value="admin">Admin</option></select>
+      <button className="bg-slate-900 text-white rounded p-2">Send invite</button>
+    </form>
+    <div className="bg-white p-4 rounded-xl shadow space-y-2">{list.map((m) => <div key={m.id} className="border rounded p-2 text-sm">
+      <div>{m.email ?? m.user_id} · {m.role} · {m.status}</div>
+      {m.user_id && <div className="flex gap-2 mt-2">
+        <button className="px-2 py-1 bg-slate-200 rounded" onClick={() => void updateRole(m.user_id!, m.role === 'admin' ? 'member' : 'admin')}>Toggle role</button>
+        <button className="px-2 py-1 bg-amber-200 rounded" onClick={() => void updateStatus(m.user_id!, m.status === 'active' ? 'suspended' : 'active')}>Toggle active</button>
+        <button className="px-2 py-1 bg-rose-200 rounded" onClick={() => void updateStatus(m.user_id!, 'removed')}>Remove</button>
+      </div>}
+    </div>)}</div></div>;
 }

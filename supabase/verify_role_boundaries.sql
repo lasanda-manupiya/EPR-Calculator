@@ -1,0 +1,7 @@
+-- MVP verification checklist for RLS + role boundaries
+-- 1) As superadmin: select create_company_with_admin('Acme Ltd', 'owner@acme.com', 'Acme Owner');
+-- 2) As company admin: select invite_user_to_company('<company_uuid>', 'member@acme.com', 'member');
+-- 3) As company member: expect ERROR on invite_user_to_company/update_membership_status/change_membership_role.
+-- 4) As admin from company A: expect zero rows when selecting products/company_settings from company B.
+-- 5) Confirm audit logs written:
+--    select action, target_type, created_at from audit_logs order by created_at desc limit 20;
