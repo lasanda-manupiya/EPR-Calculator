@@ -176,25 +176,42 @@ declare
   target_company text;
   target_name text;
   created_company_id uuid;
+  invited_company_id uuid;
+  invited_role text;
 begin
-  if lower(new.email) <> 'admin@sustainzone.co.uk' then
-    raise exception 'Only admin@sustainzone.co.uk can self-register.';
-  end if;
+  invited_company_id := nullif(new.raw_user_meta_data ->> 'invited_company_id', '')::uuid;
+  invited_role := lower(coalesce(new.raw_user_meta_data ->> 'invited_role', 'member'));
 
   target_company := nullif(trim(coalesce(new.raw_user_meta_data ->> 'company_name', '')), '');
   target_name := nullif(trim(coalesce(new.raw_user_meta_data ->> 'name', '')), '');
 
-  if target_company is null then
-    target_company := split_part(new.email, '@', 1) || ' Company';
+  if lower(new.email) like '%@sustainzone.co.uk' then
+    if target_company is null then
+      target_company := split_part(new.email, '@', 1) || ' Company';
+    end if;
+
+    insert into public.companies (name, created_by)
+    values (target_company, new.id)
+    on conflict (name) do update set name = excluded.name
+    returning id into created_company_id;
+
+    insert into public.company_admins (company_id, user_id, full_name, role)
+    values (created_company_id, new.id, target_name, 'superadmin')
+    on conflict (company_id, user_id) do nothing;
+
+    return new;
   end if;
 
-  insert into public.companies (name, created_by)
-  values (target_company, new.id)
-  on conflict (name) do update set name = excluded.name
-  returning id into created_company_id;
+  if invited_company_id is null then
+    raise exception 'Non-sustainzone users must be invited to an existing company.';
+  end if;
+
+  if invited_role not in ('admin', 'member') then
+    invited_role := 'member';
+  end if;
 
   insert into public.company_admins (company_id, user_id, full_name, role)
-  values (created_company_id, new.id, target_name, 'superadmin')
+  values (invited_company_id, new.id, target_name, invited_role)
   on conflict (company_id, user_id) do nothing;
 
   return new;

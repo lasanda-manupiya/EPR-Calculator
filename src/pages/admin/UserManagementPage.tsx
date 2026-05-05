@@ -7,6 +7,11 @@ interface AuthUserView {
   created_at?: string;
 }
 
+interface CompanyOption {
+  id: string;
+  name: string;
+}
+
 export default function UserManagementPage() {
   const [users, setUsers] = useState<AuthUserView[]>([]);
   const [error, setError] = useState('');
@@ -14,12 +19,25 @@ export default function UserManagementPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [companyId, setCompanyId] = useState('');
+  const [role, setRole] = useState<'admin' | 'member'>('member');
 
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getUser().then(({ error: authError }) => {
       if (authError) setError(authError.message);
     });
+
+    supabase
+      .from('companies')
+      .select('id,name')
+      .order('name', { ascending: true })
+      .then(({ data }) => {
+        const next = (data ?? []) as CompanyOption[];
+        setCompanies(next);
+        if (next.length) setCompanyId(next[0].id);
+      });
 
     supabase
       .from('auth_users_view')
@@ -45,10 +63,6 @@ export default function UserManagementPage() {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail.endsWith('@sustainzone.co.uk')) {
-      setError('Only @sustainzone.co.uk email addresses can be created.');
-      return;
-    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -58,6 +72,12 @@ export default function UserManagementPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: normalizedEmail,
       password,
+      options: {
+        data: {
+          invited_company_id: companyId,
+          invited_role: role,
+        },
+      },
     });
 
     if (signUpError) {
@@ -84,7 +104,7 @@ export default function UserManagementPage() {
 
       <div className="bg-white rounded-2xl p-5 shadow space-y-4">
         <h4 className="font-semibold">Create authenticated user</h4>
-        <p className="text-sm text-slate-600">Create a user directly from this page using Supabase Auth sign-up. This uses the same domain policy as self-registration.</p>
+        <p className="text-sm text-slate-600">Create admin/member users for a selected company. Only self-registered superadmins must use @sustainzone.co.uk; invited users can use any domain.</p>
         <form onSubmit={onCreateUser} className="grid md:grid-cols-3 gap-3">
           <input
             required
@@ -92,8 +112,15 @@ export default function UserManagementPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="border rounded-lg p-2"
-            placeholder="user@sustainzone.co.uk"
+            placeholder="user@any-domain.com"
           />
+          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="border rounded-lg p-2" required>
+            {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+          </select>
+          <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')} className="border rounded-lg p-2">
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
           <input
             required
             type="password"
