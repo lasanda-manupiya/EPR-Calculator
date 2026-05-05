@@ -76,6 +76,11 @@ returns boolean language sql stable as $$
   );
 $$;
 
+create or replace function public.is_root_admin_email()
+returns boolean language sql stable as $$
+  select lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@sustainzone.co.uk';
+$$;
+
 create policy "Products by company, superadmin sees all" on public.products
 for all to authenticated
 using (
@@ -89,18 +94,32 @@ with check (
   )
 );
 
-create policy "Reference library by company, superadmin sees all" on public.reference_library
-for all to authenticated
+create policy "Reference library read by company, superadmin sees all" on public.reference_library
+for select to authenticated
 using (
   public.is_superadmin() or company_id in (
     select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
   )
-)
+);
+
+create policy "Reference library write only root admin" on public.reference_library
+for insert to authenticated
 with check (
-  public.is_superadmin() or company_id in (
-    select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+  public.is_root_admin_email() and (
+    public.is_superadmin() or company_id in (
+      select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()
+    )
   )
 );
+
+create policy "Reference library update only root admin" on public.reference_library
+for update to authenticated
+using (public.is_root_admin_email())
+with check (public.is_root_admin_email());
+
+create policy "Reference library delete only root admin" on public.reference_library
+for delete to authenticated
+using (public.is_root_admin_email());
 
 create policy "Settings by company, superadmin sees all" on public.company_settings
 for all to authenticated
@@ -158,8 +177,8 @@ declare
   target_name text;
   created_company_id uuid;
 begin
-  if lower(new.email) not like '%@sustainzone.co.uk' then
-    raise exception 'Only @sustainzone.co.uk users can register.';
+  if lower(new.email) <> 'admin@sustainzone.co.uk' then
+    raise exception 'Only admin@sustainzone.co.uk can self-register.';
   end if;
 
   target_company := nullif(trim(coalesce(new.raw_user_meta_data ->> 'company_name', '')), '');
