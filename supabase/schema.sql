@@ -36,7 +36,7 @@ create table if not exists public.company_admins (
   company_id uuid not null references public.companies(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'member' check (role in ('superadmin', 'admin', 'member')),
+  role text not null default 'supplier' check (role in ('superadmin', 'admin', 'supplier')),
   created_at timestamptz not null default now(),
   unique (company_id, user_id)
 );
@@ -150,7 +150,7 @@ for select to authenticated using (
 create policy "Only superadmin can promote/create admins" on public.company_admins
 for insert to authenticated with check (public.is_superadmin());
 
-create policy "Admin can add members in own company" on public.company_admins
+create policy "Admin can add suppliers in own company" on public.company_admins
 for update to authenticated
 using (
   company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid() and ca.role in ('admin','superadmin'))
@@ -158,11 +158,11 @@ using (
 with check (
   (
     public.is_superadmin()
-    and role in ('superadmin','admin','member')
+    and role in ('superadmin','admin','supplier')
   )
   or (
     company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid() and ca.role = 'admin')
-    and role = 'member'
+    and role = 'supplier'
   )
 );
 
@@ -180,7 +180,7 @@ declare
   invited_role text;
 begin
   invited_company_id := nullif(new.raw_user_meta_data ->> 'invited_company_id', '')::uuid;
-  invited_role := lower(coalesce(new.raw_user_meta_data ->> 'invited_role', 'member'));
+  invited_role := lower(coalesce(new.raw_user_meta_data ->> 'invited_role', 'supplier'));
 
   target_company := nullif(trim(coalesce(new.raw_user_meta_data ->> 'company_name', '')), '');
   target_name := nullif(trim(coalesce(new.raw_user_meta_data ->> 'name', '')), '');
@@ -206,8 +206,8 @@ begin
     raise exception 'Non-sustainzone users must be invited to an existing company.';
   end if;
 
-  if invited_role not in ('admin', 'member') then
-    invited_role := 'member';
+  if invited_role not in ('admin', 'supplier') then
+    invited_role := 'supplier';
   end if;
 
   insert into public.company_admins (company_id, user_id, full_name, role)

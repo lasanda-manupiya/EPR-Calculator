@@ -21,7 +21,7 @@ export default function UserManagementPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [companyId, setCompanyId] = useState('');
-  const [role, setRole] = useState<'admin' | 'member'>('member');
+  const [role, setRole] = useState<'admin' | 'supplier'>('supplier');
 
   useEffect(() => {
     if (!supabase) return;
@@ -94,17 +94,17 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">Access management</h2>
+      <h2 className="text-2xl font-semibold">Access management & onboarding</h2>
 
       <div className="bg-white p-5 rounded-2xl shadow space-y-3">
-        <p className="text-sm text-slate-700">User accounts are now handled exclusively by Supabase Auth (email/password). New registrations are stored under Supabase Dashboard → Authentication → Users.</p>
+        <p className="text-sm text-slate-700">Structure: Super Admin → Company Admin → Supplier. Use this screen to invite company admins/suppliers and assign access by company. Admins and suppliers can add products; admins can monitor everything for their company in one place.</p>
         {error && <p className="text-amber-700 text-sm">{error}</p>}
         {message && <p className="text-emerald-700 text-sm">{message}</p>}
       </div>
 
       <div className="bg-white rounded-2xl p-5 shadow space-y-4">
         <h4 className="font-semibold">Create authenticated user</h4>
-        <p className="text-sm text-slate-600">Create admin/member users for a selected company. Only self-registered superadmins must use @sustainzone.co.uk; invited users can use any domain.</p>
+        <p className="text-sm text-slate-600">Create admin/supplier users for a selected company. Super admin controls companies and company admins. Company admins can then onboard suppliers.</p>
         <form onSubmit={onCreateUser} className="grid md:grid-cols-3 gap-3">
           <input
             required
@@ -117,8 +117,8 @@ export default function UserManagementPage() {
           <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="border rounded-lg p-2" required>
             {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
           </select>
-          <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')} className="border rounded-lg p-2">
-            <option value="member">Member</option>
+          <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'supplier')} className="border rounded-lg p-2">
+            <option value="supplier">Supplier</option>
             <option value="admin">Admin</option>
           </select>
           <input

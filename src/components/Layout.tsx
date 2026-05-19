@@ -25,7 +25,13 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
         <button className="mt-8 w-full bg-slate-800 hover:bg-slate-700 rounded-lg py-2 text-sm" onClick={() => void signOut()}>Sign out</button>
       </aside>
-      <main className="ml-72 w-full p-10">{children}</main>
+      <main className="ml-72 w-full p-10 pb-20">
+        {children}
+        <footer className="mt-12 rounded-2xl border border-emerald-100 bg-white px-5 py-4 text-sm text-slate-600">
+          <p className="font-medium text-slate-800">SustainZone · MVP Workspace</p>
+          <p className="mt-1">Super Admin can manage all companies, Company Admin can manage suppliers and full company data visibility.</p>
+        </footer>
+      </main>
     </div>
   );
 }
