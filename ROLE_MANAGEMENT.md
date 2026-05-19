@@ -1,10 +1,10 @@
-# Role management: Superadmin → Admin → Member
+# Role management: Superadmin → Admin → Supplier
 
 This project uses three roles in `public.company_admins.role`:
 
 - `superadmin`: can create companies and promote users to `admin`.
 - `admin`: can manage members in their company.
-- `member`: standard user; cannot add users.
+- `supplier`: supplier user under a company; can work on products but cannot manage users.
 
 ## 1) Registration rule (domain restricted)
 
@@ -42,11 +42,11 @@ where ca.user_id = u.id
 
 ## 3) Add members (admin/superadmin workflow)
 
-Members should remain `member` role:
+Suppliers should remain `supplier` role:
 
 ```sql
 update public.company_admins ca
-set role = 'member'
+set role = 'supplier'
 from auth.users u
 where ca.user_id = u.id
   and ca.company_id = '<company_uuid>'
@@ -63,4 +63,16 @@ set role = 'superadmin'
 from auth.users u
 where ca.user_id = u.id
   and lower(u.email) like '%@sustainzone.co.uk';
+```
+
+## 5) Grant super admin to requested user
+
+Run this in Supabase SQL editor to grant super admin access to `lasanda@sustainzone.co.uk` across existing company memberships:
+
+```sql
+update public.company_admins ca
+set role = 'superadmin'
+from auth.users u
+where ca.user_id = u.id
+  and lower(u.email) = 'lasanda@sustainzone.co.uk';
 ```
