@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface AuthUserView {
@@ -16,12 +16,17 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState<AuthUserView[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [companyId, setCompanyId] = useState('');
+  const [newCompanyName, setNewCompanyName] = useState('');
   const [role, setRole] = useState<'admin' | 'supplier'>('supplier');
+  const [companyMode, setCompanyMode] = useState<'existing' | 'new'>('existing');
+
+  const creatingAdmin = role === 'admin';
 
   useEffect(() => {
     if (!supabase) return;
@@ -52,6 +57,12 @@ export default function UserManagementPage() {
       });
   }, []);
 
+  const canSubmit = useMemo(() => {
+    if (!creatingAdmin) return !!companyId;
+    if (companyMode === 'new') return newCompanyName.trim().length > 1;
+    return !!companyId;
+  }, [companyId, companyMode, creatingAdmin, newCompanyName]);
+
   const onCreateUser = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -69,14 +80,27 @@ export default function UserManagementPage() {
       return;
     }
 
+    if (!canSubmit) {
+      setError('Please select an existing company or enter a new company name.');
+      return;
+    }
+
+    const metadata: Record<string, string> = {
+      name: fullName.trim(),
+      invited_role: role,
+    };
+
+    if (creatingAdmin && companyMode === 'new') {
+      metadata.invited_company_name = newCompanyName.trim();
+    } else {
+      metadata.invited_company_id = companyId;
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: normalizedEmail,
       password,
       options: {
-        data: {
-          invited_company_id: companyId,
-          invited_role: role,
-        },
+        data: metadata,
       },
     });
 
@@ -87,9 +111,11 @@ export default function UserManagementPage() {
 
     const needsEmailConfirmation = !data.session;
     setMessage(needsEmailConfirmation ? 'User created. They must confirm their email before signing in.' : 'User created successfully.');
+    setFullName('');
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setNewCompanyName('');
   };
 
   return (
@@ -104,8 +130,16 @@ export default function UserManagementPage() {
 
       <div className="bg-white rounded-2xl p-5 shadow space-y-4">
         <h4 className="font-semibold">Create authenticated user</h4>
-        <p className="text-sm text-slate-600">Create admin/supplier users for a selected company. Super admin controls companies and company admins. Company admins can then onboard suppliers.</p>
+        <p className="text-sm text-slate-600">Create admin/supplier users for a selected company. Super admin can assign an admin to an existing company or create a new company while creating the admin account.</p>
         <form onSubmit={onCreateUser} className="grid md:grid-cols-3 gap-3">
+          <input
+            required
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="border rounded-lg p-2"
+            placeholder="Full name"
+          />
           <input
             required
             type="email"
@@ -114,13 +148,40 @@ export default function UserManagementPage() {
             className="border rounded-lg p-2"
             placeholder="user@any-domain.com"
           />
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="border rounded-lg p-2" required>
-            {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-          </select>
           <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'supplier')} className="border rounded-lg p-2">
             <option value="supplier">Supplier</option>
             <option value="admin">Admin</option>
           </select>
+
+          {creatingAdmin && (
+            <div className="md:col-span-3 grid md:grid-cols-2 gap-3 rounded-lg border p-3 bg-slate-50">
+              <select value={companyMode} onChange={(e) => setCompanyMode(e.target.value as 'existing' | 'new')} className="border rounded-lg p-2">
+                <option value="existing">Assign to existing company</option>
+                <option value="new">Create new company for this admin</option>
+              </select>
+              {companyMode === 'new' ? (
+                <input
+                  required
+                  type="text"
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className="border rounded-lg p-2"
+                  placeholder="New company name"
+                />
+              ) : (
+                <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="border rounded-lg p-2" required>
+                  {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+
+          {!creatingAdmin && (
+            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="border rounded-lg p-2 md:col-span-3" required>
+              {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+            </select>
+          )}
+
           <input
             required
             type="password"

@@ -178,9 +178,11 @@ declare
   created_company_id uuid;
   invited_company_id uuid;
   invited_role text;
+  invited_company_name text;
 begin
   invited_company_id := nullif(new.raw_user_meta_data ->> 'invited_company_id', '')::uuid;
   invited_role := lower(coalesce(new.raw_user_meta_data ->> 'invited_role', 'supplier'));
+  invited_company_name := nullif(trim(coalesce(new.raw_user_meta_data ->> 'invited_company_name', '')), '');
 
   target_company := nullif(trim(coalesce(new.raw_user_meta_data ->> 'company_name', '')), '');
   target_name := nullif(trim(coalesce(new.raw_user_meta_data ->> 'name', '')), '');
@@ -200,6 +202,13 @@ begin
     on conflict (company_id, user_id) do nothing;
 
     return new;
+  end if;
+
+  if invited_company_id is null and invited_company_name is not null and invited_role = 'admin' then
+    insert into public.companies (name, created_by)
+    values (invited_company_name, new.id)
+    on conflict (name) do update set name = excluded.name
+    returning id into invited_company_id;
   end if;
 
   if invited_company_id is null then
