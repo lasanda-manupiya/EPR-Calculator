@@ -7,12 +7,23 @@ const items = ['Dashboard', 'Products', 'Create Product', 'Packaging Library', '
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  const { user, signOut } = useAuth();
+  const { user, signOut, memberships, activeCompanyId, setActiveCompanyId, isSuperadmin } = useAuth();
+  const showCompanySelector = isSuperadmin || memberships.length > 1;
+
   return (
     <div className="min-h-screen flex bg-slate-100">
       <aside className="fixed left-0 top-0 h-full w-72 bg-slate-950 text-white p-6 shadow-2xl">
         <h1 className="text-2xl font-bold mb-2">SustainZone EPR</h1>
-        <p className="text-xs text-slate-300 mb-8">{user?.email}</p>
+        <p className="text-xs text-slate-300 mb-6">{user?.email}</p>
+        {showCompanySelector && (
+          <div className="mb-4">
+            <label className="text-xs text-slate-300">Active company</label>
+            <select className="mt-1 w-full rounded bg-slate-800 px-2 py-2 text-sm" value={activeCompanyId ?? ''} onChange={(e) => setActiveCompanyId(e.target.value || null)}>
+              <option value="">Select company</option>
+              {memberships.map((membership) => <option key={membership.companyId} value={membership.companyId}>{membership.companyName}</option>)}
+            </select>
+          </div>
+        )}
         <p className={`text-xs mb-4 rounded px-2 py-1 ${isSupabaseConfigured ? 'bg-emerald-600/30 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>
           {isSupabaseConfigured ? 'Cloud mode: Supabase connected' : `Local mode: missing ${missingSupabaseConfig.url ? 'VITE_SUPABASE_URL' : ''}${missingSupabaseConfig.url && missingSupabaseConfig.anonKey ? ' + ' : ''}${missingSupabaseConfig.anonKey ? 'VITE_SUPABASE_ANON_KEY' : ''}`}
         </p>
@@ -25,13 +36,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
         <button className="mt-8 w-full bg-slate-800 hover:bg-slate-700 rounded-lg py-2 text-sm" onClick={() => void signOut()}>Sign out</button>
       </aside>
-      <main className="ml-72 w-full p-10 pb-20">
-        {children}
-        <footer className="mt-12 rounded-2xl border border-emerald-100 bg-white px-5 py-4 text-sm text-slate-600">
-          <p className="font-medium text-slate-800">SustainZone · MVP Workspace</p>
-          <p className="mt-1">Super Admin can manage all companies, Company Admin can manage suppliers and full company data visibility.</p>
-        </footer>
-      </main>
+      <main className="ml-72 w-full p-10 pb-20">{children}</main>
     </div>
   );
 }

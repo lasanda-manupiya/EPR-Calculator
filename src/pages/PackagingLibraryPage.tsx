@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MaterialType, PackagingType, ReferenceItem } from '@/types';
-import { loadReferenceLibrary, saveReferenceLibraryRemote, seedReferenceLibraryIfNeeded } from '@/utils/cloudStorage';
+import { createReferenceLibraryItemRemote, loadReferenceLibrary, seedReferenceLibraryIfNeeded } from '@/utils/cloudStorage';
 import { useAuth } from '@/context/AuthContext';
 
 const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
@@ -8,34 +8,36 @@ const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
 };
 
 export default function PackagingLibraryPage() {
-  const { user } = useAuth();
+  const { user, activeCompanyId } = useAuth();
   const canEditLibrary = user?.email?.toLowerCase() === 'admin@sustainzone.co.uk';
   const [q, setQ] = useState(''); const [material, setMaterial] = useState(''); const [ptype, setPtype] = useState('');
   const [items, setItems] = useState<ReferenceItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  useEffect(() => { seedReferenceLibraryIfNeeded().then(() => loadReferenceLibrary().then(setItems)); }, []);
+  useEffect(() => { seedReferenceLibraryIfNeeded(activeCompanyId).then(() => loadReferenceLibrary(activeCompanyId).then(setItems)); }, [activeCompanyId]);
 
   const filtered = useMemo(() => items.filter(r => (!q || r.referenceName.toLowerCase().includes(q.toLowerCase())) && (!material || r.materialType === material) && (!ptype || r.packagingType === ptype)), [items, q, material, ptype]);
 
   const persist = async (next: ReferenceItem[]) => {
     if (!canEditLibrary) return;
     setItems(next);
-    await saveReferenceLibraryRemote(next);
+    throw new Error("Bulk save removed for tenant safety");
   };
   const submit = async () => {
     const densityValue = form.length && form.width && form.height ? form.averageWeight / (form.length * form.width * form.height) : 0;
     if (editingId) {
-      await persist(items.map(i => i.id === editingId ? { ...i, ...form, densityValue } : i));
+      return;
     } else {
-      await persist([...items, { id: crypto.randomUUID(), ...form, densityValue }]);
+      const nextItem={ id: crypto.randomUUID(), ...form, densityValue };
+      setItems((prev)=>[...prev,nextItem]);
+      await createReferenceLibraryItemRemote(nextItem, activeCompanyId);
     }
     setEditingId(null); setForm(emptyForm);
   };
 
   return <div className="space-y-4"><h2 className="text-2xl font-semibold">Packaging Library</h2>
-    <div className="bg-white rounded-xl p-4 shadow space-y-3"><h3 className="font-semibold">Add or Edit reference</h3>
+    <div className="bg-white rounded-xl p-4 shadow space-y-3"><h3 className="font-semibold">Add or Edit reference</h3>{!activeCompanyId && <p className="text-sm text-amber-700">Select an active company before creating or editing records.</p>}
       {!canEditLibrary && <p className="text-sm text-amber-700">Only admin@sustainzone.co.uk can edit the packaging library.</p>}
       <div className="grid md:grid-cols-4 gap-2">
         <input disabled={!canEditLibrary} className="border rounded px-3 py-2 disabled:bg-slate-100" placeholder="Reference name" value={form.referenceName} onChange={e => setForm({ ...form, referenceName: e.target.value })} />
