@@ -7,7 +7,7 @@ const items = ['Dashboard', 'Products', 'Create Product', 'Packaging Library', '
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  const { user, signOut, memberships, activeCompanyId, setActiveCompanyId, isSuperadmin } = useAuth();
+  const { user, signOut, memberships, activeCompanyId, setActiveCompanyId, isSuperadmin, authIssue } = useAuth();
   const showCompanySelector = isSuperadmin || memberships.length > 1;
 
   return (
@@ -20,10 +20,11 @@ export default function Layout({ children }: { children: ReactNode }) {
             <label className="text-xs text-slate-300">Active company</label>
             <select className="mt-1 w-full rounded bg-slate-800 px-2 py-2 text-sm" value={activeCompanyId ?? ''} onChange={(e) => setActiveCompanyId(e.target.value || null)}>
               <option value="">Select company</option>
-              {memberships.map((membership) => <option key={membership.companyId} value={membership.companyId}>{membership.companyName}</option>)}
+              {memberships.map((membership) => <option key={membership.companyId} value={membership.companyId}>{membership.companyName} ({membership.role})</option>)}
             </select>
           </div>
         )}
+        {authIssue && <p className="text-xs mb-4 rounded px-2 py-1 bg-amber-500/20 text-amber-200">{authIssue}</p>}
         <p className={`text-xs mb-4 rounded px-2 py-1 ${isSupabaseConfigured ? 'bg-emerald-600/30 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>
           {isSupabaseConfigured ? 'Cloud mode: Supabase connected' : `Local mode: missing ${missingSupabaseConfig.url ? 'VITE_SUPABASE_URL' : ''}${missingSupabaseConfig.url && missingSupabaseConfig.anonKey ? ' + ' : ''}${missingSupabaseConfig.anonKey ? 'VITE_SUPABASE_ANON_KEY' : ''}`}
         </p>
