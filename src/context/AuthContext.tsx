@@ -17,33 +17,82 @@ interface AuthValue {
   activeCompanyName: string | null;
   setActiveCompanyId: (companyId: string | null) => void;
   isSuperadmin: boolean;
+  authIssue: string | null;
   signUp: (email: string, password: string, metadata?: { name?: string; companyName?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
+const ACTIVE_COMPANY_KEY = 'epr_active_company_id';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null);
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(localStorage.getItem(ACTIVE_COMPANY_KEY));
+  const [authIssue, setAuthIssue] = useState<string | null>(null);
+
+  const setActiveCompanyId = (companyId: string | null) => {
+    setActiveCompanyIdState(companyId);
+    if (companyId) localStorage.setItem(ACTIVE_COMPANY_KEY, companyId);
+    else localStorage.removeItem(ACTIVE_COMPANY_KEY);
+  };
 
   const loadMemberships = async (userId?: string) => {
     if (!supabase || !userId) {
       setMemberships([]);
-      setActiveCompanyIdState(null);
+      setActiveCompanyId(null);
       return;
     }
-    const { data } = await supabase.from('company_admins').select('role, company_id, companies(name)').eq('user_id', userId);
-    const next = (data ?? []).map((row: { role: Membership['role']; company_id: string; companies: { name: string } | { name: string }[] | null }) => ({
+
+    const { data, error } = await supabase
+      .from('company_admins')
+      .select('role, company_id, companies!inner(name)')
+      .eq('user_id', userId);
+
+    if (error) {
+      setMemberships([]);
+      setActiveCompanyId(null);
+      setAuthIssue(`Failed to load company memberships: ${error.message}`);
+      return;
+    }
+
+    const next = (data ?? []).map((row: { role: Membership['role']; company_id: string; companies: { name: string } | { name: string }[] }) => ({
       role: row.role,
       companyId: row.company_id,
-      companyName: Array.isArray(row.companies) ? row.companies[0]?.name ?? 'Unknown company' : row.companies?.name ?? 'Unknown company',
+      companyName: Array.isArray(row.companies) ? row.companies[0]?.name ?? 'Unknown company' : row.companies.name,
     }));
+
     setMemberships(next);
-    setActiveCompanyIdState((current) => (current && next.some((m) => m.companyId === current) ? current : next[0]?.companyId ?? null));
+    const isSuper = next.some((m) => m.role === 'superadmin');
+    const hasCurrent = !!activeCompanyId && next.some((m) => m.companyId === activeCompanyId);
+
+    if (hasCurrent) {
+      setAuthIssue(null);
+      return;
+    }
+
+    if (next.length === 1) {
+      setActiveCompanyId(next[0].companyId);
+      setAuthIssue(null);
+      return;
+    }
+
+    if (isSuper && next.length > 1) {
+      setActiveCompanyId(null);
+      setAuthIssue('Select an active company to continue.');
+      return;
+    }
+
+    if (!next.length) {
+      setActiveCompanyId(null);
+      setAuthIssue('Your account has no company mapping yet. Contact your superadmin.');
+      return;
+    }
+
+    setActiveCompanyId(next[0].companyId);
+    setAuthIssue(null);
   };
 
   useEffect(() => {
@@ -53,13 +102,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      void loadMemberships(data.session?.user?.id);
-      setLoading(false);
+      void loadMemberships(data.session?.user?.id).finally(() => setLoading(false));
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      void loadMemberships(nextSession?.user?.id);
-      setLoading(false);
+      void loadMemberships(nextSession?.user?.id).finally(() => setLoading(false));
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -85,11 +132,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isSuperadmin = memberships.some((m) => m.role === 'superadmin');
   const activeCompanyName = memberships.find((m) => m.companyId === activeCompanyId)?.companyName ?? null;
-  const setActiveCompanyId = (companyId: string | null) => setActiveCompanyIdState(companyId);
 
   const value = useMemo(
-    () => ({ user: session?.user ?? null, session, loading, signUp, signIn, signOut, memberships, activeCompanyId, activeCompanyName, setActiveCompanyId, isSuperadmin }),
-    [session, loading, memberships, activeCompanyId, activeCompanyName, isSuperadmin],
+    () => ({ user: session?.user ?? null, session, loading, signUp, signIn, signOut, memberships, activeCompanyId, activeCompanyName, setActiveCompanyId, isSuperadmin, authIssue }),
+    [session, loading, memberships, activeCompanyId, activeCompanyName, isSuperadmin, authIssue],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

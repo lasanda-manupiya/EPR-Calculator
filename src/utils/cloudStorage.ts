@@ -21,14 +21,16 @@ export const upsertProductRemote = async (product: Product, activeCompanyId?: st
   const companyId = requireCompany(activeCompanyId);
   saveProducts([product, ...getProducts().filter((p) => p.id !== product.id)]);
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('products').upsert({ id: product.id, company_id: companyId, payload: product, updated_at: new Date().toISOString() });
+  const { error } = await supabase.from('products').upsert({ id: product.id, company_id: companyId, payload: product, user_id: (product as Product & { user_id?: string }).user_id, updated_at: new Date().toISOString() });
+  if (error) throw error;
 };
 
 export const removeProductRemote = async (id: string, activeCompanyId?: string | null) => {
   const companyId = requireCompany(activeCompanyId);
   saveProducts(getProducts().filter((p) => p.id !== id));
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('products').delete().eq('id', id).eq('company_id', companyId);
+  const { error } = await supabase.from('products').delete().eq('id', id).eq('company_id', companyId);
+  if (error) throw error;
 };
 
 export const loadReferenceLibrary = async (activeCompanyId?: string | null): Promise<ReferenceItem[]> => {
@@ -49,7 +51,7 @@ export const createReferenceLibraryItemRemote = async (item: ReferenceItem, acti
 export const loadSettings = async (activeCompanyId?: string | null): Promise<CompanySettings> => {
   if (!isSupabaseConfigured || !supabase) return getSettings();
   if (!activeCompanyId) return getSettings();
-  const { data, error } = await supabase.from('company_settings').select('payload').eq('id', 'default').eq('company_id', activeCompanyId).maybeSingle();
+  const { data, error } = await supabase.from('company_settings').select('payload').eq('company_id', activeCompanyId).maybeSingle();
   if (error) throw error;
   return data?.payload ?? getSettings();
 };
@@ -58,7 +60,7 @@ export const saveSettingsRemote = async (settings: CompanySettings, activeCompan
   const companyId = requireCompany(activeCompanyId);
   saveSettings(settings);
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('company_settings').upsert({ id: 'default', company_id: companyId, payload: settings, updated_at: new Date().toISOString() });
+  await supabase.from('company_settings').upsert({ company_id: companyId, payload: settings, updated_at: new Date().toISOString() }, { onConflict: 'company_id' });
 };
 
 export const seedReferenceLibraryIfNeeded = async (activeCompanyId?: string | null) => {
