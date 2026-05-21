@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Product } from '@/types';
 import { loadProducts, removeProductRemote, upsertProductRemote } from '@/utils/cloudStorage';
+import { useAuth } from '@/context/AuthContext';
 
 export const useProducts = () => {
+  const { selectedCompanyId } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProducts().then((data) => setProducts(data)).finally(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    loadProducts(selectedCompanyId).then((data) => setProducts(data)).finally(() => setLoading(false));
+  }, [selectedCompanyId]);
 
   const upsertProduct = async (product: Product) => {
     const next = products.some((p) => p.id === product.id)
