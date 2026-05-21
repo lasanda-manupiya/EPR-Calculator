@@ -231,3 +231,62 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_auth_user();
+
+create table if not exists public.packaging_components (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.reports (
+  id uuid primary key,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.report_items (
+  id uuid primary key default gen_random_uuid(),
+  report_id uuid not null references public.reports(id) on delete cascade,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  payload jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  actor_user_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  payload jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.packaging_components enable row level security;
+alter table public.reports enable row level security;
+alter table public.report_items enable row level security;
+alter table public.audit_logs enable row level security;
+
+create policy "Tenant data access on packaging_components" on public.packaging_components
+for all to authenticated
+using (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()))
+with check (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()));
+
+create policy "Tenant data access on reports" on public.reports
+for all to authenticated
+using (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()))
+with check (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()));
+
+create policy "Tenant data access on report_items" on public.report_items
+for all to authenticated
+using (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()))
+with check (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()));
+
+create policy "Tenant data access on audit_logs" on public.audit_logs
+for all to authenticated
+using (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()))
+with check (public.is_superadmin() or company_id in (select ca.company_id from public.company_admins ca where ca.user_id = auth.uid()));

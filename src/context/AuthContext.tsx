@@ -2,13 +2,20 @@ import { createContext, ReactNode, useContext, useEffect, useMemo, useState } fr
 import { Session, User } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
+interface Membership {
+  companyId: string;
+  companyName: string;
+  role: 'superadmin' | 'admin' | 'supplier';
+}
+
 interface AuthValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  memberships: { companyId: string; companyName: string; role: 'superadmin' | 'admin' | 'supplier' }[];
-  selectedCompanyId: string | null;
-  setSelectedCompanyId: (companyId: string) => void;
+  memberships: Membership[];
+  activeCompanyId: string | null;
+  activeCompanyName: string | null;
+  setActiveCompanyId: (companyId: string | null) => void;
   isSuperadmin: boolean;
   signUp: (email: string, password: string, metadata?: { name?: string; companyName?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -20,27 +27,23 @@ const AuthContext = createContext<AuthValue | null>(null);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [memberships, setMemberships] = useState<AuthValue['memberships']>([]);
-  const [selectedCompanyId, setSelectedCompanyIdState] = useState<string | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null);
 
   const loadMemberships = async (userId?: string) => {
     if (!supabase || !userId) {
       setMemberships([]);
-      setSelectedCompanyIdState(null);
+      setActiveCompanyIdState(null);
       return;
     }
-    const { data } = await supabase
-      .from('company_admins')
-      .select('role, company_id, companies(name)')
-      .eq('user_id', userId);
-
-    const next = (data ?? []).map((row: { role: 'superadmin' | 'admin' | 'supplier'; company_id: string; companies: { name: string } | { name: string }[] | null }) => ({
+    const { data } = await supabase.from('company_admins').select('role, company_id, companies(name)').eq('user_id', userId);
+    const next = (data ?? []).map((row: { role: Membership['role']; company_id: string; companies: { name: string } | { name: string }[] | null }) => ({
       role: row.role,
       companyId: row.company_id,
       companyName: Array.isArray(row.companies) ? row.companies[0]?.name ?? 'Unknown company' : row.companies?.name ?? 'Unknown company',
     }));
     setMemberships(next);
-    setSelectedCompanyIdState((current) => (current && next.some((m) => m.companyId === current) ? current : next[0]?.companyId ?? null));
+    setActiveCompanyIdState((current) => (current && next.some((m) => m.companyId === current) ? current : next[0]?.companyId ?? null));
   };
 
   useEffect(() => {
@@ -48,34 +51,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       void loadMemberships(data.session?.user?.id);
       setLoading(false);
     });
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       void loadMemberships(nextSession?.user?.id);
       setLoading(false);
     });
-
     return () => listener.subscription.unsubscribe();
   }, []);
 
   const signUp: AuthValue['signUp'] = async (email, password, metadata) => {
     if (!supabase) throw new Error('Supabase auth is not configured.');
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name: metadata?.name,
-          company_name: metadata?.companyName,
-        },
-      },
-    });
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name: metadata?.name, company_name: metadata?.companyName } } });
     if (error) throw error;
     return { needsEmailConfirmation: !data.session };
   };
@@ -93,9 +84,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const isSuperadmin = memberships.some((m) => m.role === 'superadmin');
-  const setSelectedCompanyId = (companyId: string) => setSelectedCompanyIdState(companyId);
+  const activeCompanyName = memberships.find((m) => m.companyId === activeCompanyId)?.companyName ?? null;
+  const setActiveCompanyId = (companyId: string | null) => setActiveCompanyIdState(companyId);
 
-  const value = useMemo(() => ({ user: session?.user ?? null, session, loading, signUp, signIn, signOut, memberships, selectedCompanyId, setSelectedCompanyId, isSuperadmin }), [session, loading, memberships, selectedCompanyId, isSuperadmin]);
+  const value = useMemo(
+    () => ({ user: session?.user ?? null, session, loading, signUp, signIn, signOut, memberships, activeCompanyId, activeCompanyName, setActiveCompanyId, isSuperadmin }),
+    [session, loading, memberships, activeCompanyId, activeCompanyName, isSuperadmin],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
