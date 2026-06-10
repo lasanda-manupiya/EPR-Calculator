@@ -71,8 +71,43 @@ create policy p_companies_select on public.companies for select to authenticated
 create policy p_companies_insert on public.companies for insert to authenticated with check (public.is_superadmin());
 
 drop policy if exists p_company_admins_select on public.company_admins;
+drop policy if exists p_company_admins_write on public.company_admins;
+drop policy if exists p_company_admins_insert on public.company_admins;
+drop policy if exists p_company_admins_update on public.company_admins;
+drop policy if exists p_company_admins_delete on public.company_admins;
 create policy p_company_admins_select on public.company_admins for select to authenticated using (public.can_access_company(company_id));
-create policy p_company_admins_write on public.company_admins for all to authenticated using (public.can_access_company(company_id)) with check (public.can_access_company(company_id));
+-- Superadmin can manage all rows; admins can only manage supplier-role rows in their own company
+create policy p_company_admins_insert on public.company_admins for insert to authenticated
+  with check (
+    public.is_superadmin()
+    or (
+      exists (select 1 from public.company_admins ca where ca.user_id = auth.uid() and ca.role = 'admin' and ca.company_id = company_admins.company_id)
+      and role = 'supplier'
+    )
+  );
+create policy p_company_admins_update on public.company_admins for update to authenticated
+  using (
+    public.is_superadmin()
+    or (
+      exists (select 1 from public.company_admins ca where ca.user_id = auth.uid() and ca.role = 'admin' and ca.company_id = company_admins.company_id)
+      and role = 'supplier'
+    )
+  )
+  with check (
+    public.is_superadmin()
+    or (
+      exists (select 1 from public.company_admins ca where ca.user_id = auth.uid() and ca.role = 'admin' and ca.company_id = company_admins.company_id)
+      and role = 'supplier'
+    )
+  );
+create policy p_company_admins_delete on public.company_admins for delete to authenticated
+  using (
+    public.is_superadmin()
+    or (
+      exists (select 1 from public.company_admins ca where ca.user_id = auth.uid() and ca.role = 'admin' and ca.company_id = company_admins.company_id)
+      and role = 'supplier'
+    )
+  );
 
 create policy p_products_all on public.products for all to authenticated using (public.can_access_company(company_id)) with check (public.can_access_company(company_id));
 create policy p_settings_all on public.company_settings for all to authenticated using (public.can_access_company(company_id)) with check (public.can_access_company(company_id));
@@ -116,8 +151,11 @@ begin
     return new;
   end if;
   if lower(new.email) like '%@sustainzone.co.uk' then
-    insert into public.companies(name,created_by) values(split_part(new.email,'@',1)||' Company',new.id) on conflict(name) do update set name=excluded.name returning id into inv.company_id;
-    insert into public.company_admins(company_id,user_id,full_name,role) values(inv.company_id,new.id,new.raw_user_meta_data->>'name','superadmin') on conflict do nothing;
+    -- Only grant superadmin if none exists yet (enforce single superadmin)
+    if not exists (select 1 from public.company_admins where role = 'superadmin') then
+      insert into public.companies(name,created_by) values(split_part(new.email,'@',1)||' Company',new.id) on conflict(name) do update set name=excluded.name returning id into inv.company_id;
+      insert into public.company_admins(company_id,user_id,full_name,role) values(inv.company_id,new.id,new.raw_user_meta_data->>'name','superadmin') on conflict do nothing;
+    end if;
     return new;
   end if;
   return new;

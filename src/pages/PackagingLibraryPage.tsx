@@ -8,8 +8,8 @@ const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
 };
 
 export default function PackagingLibraryPage() {
-  const { user, activeCompanyId } = useAuth();
-  const canEditLibrary = user?.email?.toLowerCase() === 'admin@sustainzone.co.uk';
+  const { activeCompanyId, isSuperadmin } = useAuth();
+  const canEditLibrary = isSuperadmin;
   const [q, setQ] = useState(''); const [material, setMaterial] = useState(''); const [ptype, setPtype] = useState('');
   const [items, setItems] = useState<ReferenceItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);

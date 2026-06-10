@@ -3,11 +3,13 @@ import { ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { isSupabaseConfigured, missingSupabaseConfig } from '@/lib/supabase';
 
-const items = ['Dashboard', 'Products', 'Create Product', 'Packaging Library', 'Reports', 'Access Management', 'Settings'];
+const allItems = ['Dashboard', 'Products', 'Create Product', 'Packaging Library', 'Reports', 'Access Management', 'Settings'];
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { user, signOut, memberships, activeCompanyId, setActiveCompanyId, isSuperadmin, authIssue } = useAuth();
+  const isAdminOrAbove = memberships.some((m) => m.role === 'admin' || m.role === 'superadmin');
+  const items = allItems.filter((label) => label !== 'Access Management' || isAdminOrAbove);
   const showCompanySelector = isSuperadmin || memberships.length > 1;
 
   return (
