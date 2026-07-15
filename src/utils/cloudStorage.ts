@@ -2,70 +2,175 @@ import { CompanySettings, Product, ReferenceItem } from '@/types';
 import { referenceLibrary as defaultReferenceLibrary } from '@/data/referenceLibrary';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getProducts, getSettings, saveProducts, saveSettings } from '@/utils/storage';
-import { getReferenceLibrary, saveReferenceLibrary } from '@/utils/referenceLibraryStorage';
+import { getHiddenDefaults, getOwnLibrary, saveHiddenDefaults, saveOwnLibrary } from '@/utils/referenceLibraryStorage';
 
-const requireCompany = (activeCompanyId: string | null | undefined) => {
-  if (!activeCompanyId) throw new Error('Select an active company before creating or editing records.');
-  return activeCompanyId;
+const requireCompany = (companyId: string | null | undefined) => {
+  if (!companyId) throw new Error('Your account is not linked to a company yet.');
+  return companyId;
 };
 
-export const loadProducts = async (activeCompanyId?: string | null): Promise<Product[]> => {
+// ----------------------------- Products (company-scoped) --------------------
+export const loadProducts = async (companyId?: string | null): Promise<Product[]> => {
   if (!isSupabaseConfigured || !supabase) return getProducts();
-  if (!activeCompanyId) return [];
-  const { data, error } = await supabase.from('products').select('payload').eq('company_id', activeCompanyId).order('created_at', { ascending: false });
+  if (!companyId) return [];
+  const { data, error } = await supabase
+    .from('products')
+    .select('payload')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row: { payload: Product }) => row.payload);
 };
 
-export const upsertProductRemote = async (product: Product, activeCompanyId?: string | null) => {
-  const companyId = requireCompany(activeCompanyId);
+export const upsertProductRemote = async (product: Product, companyId?: string | null, userId?: string | null) => {
+  const scopedCompany = requireCompany(companyId);
   saveProducts([product, ...getProducts().filter((p) => p.id !== product.id)]);
   if (!isSupabaseConfigured || !supabase) return;
-  const { error } = await supabase.from('products').upsert({ id: product.id, company_id: companyId, payload: product, user_id: (product as Product & { user_id?: string }).user_id, updated_at: new Date().toISOString() });
+  const { error } = await supabase.from('products').upsert({
+    id: product.id,
+    company_id: scopedCompany,
+    user_id: userId ?? null,
+    payload: product,
+    updated_at: new Date().toISOString(),
+  });
   if (error) throw error;
 };
 
-export const removeProductRemote = async (id: string, activeCompanyId?: string | null) => {
-  const companyId = requireCompany(activeCompanyId);
+export const removeProductRemote = async (id: string, companyId?: string | null) => {
+  const scopedCompany = requireCompany(companyId);
   saveProducts(getProducts().filter((p) => p.id !== id));
   if (!isSupabaseConfigured || !supabase) return;
-  const { error } = await supabase.from('products').delete().eq('id', id).eq('company_id', companyId);
+  const { error } = await supabase.from('products').delete().eq('id', id).eq('company_id', scopedCompany);
   if (error) throw error;
 };
 
-export const loadReferenceLibrary = async (activeCompanyId?: string | null): Promise<ReferenceItem[]> => {
-  if (!isSupabaseConfigured || !supabase) return getReferenceLibrary();
-  if (!activeCompanyId) return [];
-  const { data, error } = await supabase.from('reference_library').select('payload').or(`company_id.eq.${activeCompanyId},company_id.is.null`);
-  if (error) throw error;
-  if (!data?.length) return getReferenceLibrary();
-  return data.map((row: { payload: ReferenceItem }) => row.payload);
-};
-
-export const createReferenceLibraryItemRemote = async (item: ReferenceItem, activeCompanyId?: string | null) => {
-  const companyId = requireCompany(activeCompanyId);
-  if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('reference_library').insert({ id: item.id, company_id: companyId, payload: item, updated_at: new Date().toISOString() });
-};
-
-export const loadSettings = async (activeCompanyId?: string | null): Promise<CompanySettings> => {
+// ----------------------------- Settings (company-scoped) --------------------
+export const loadSettings = async (companyId?: string | null): Promise<CompanySettings> => {
   if (!isSupabaseConfigured || !supabase) return getSettings();
-  if (!activeCompanyId) return getSettings();
-  const { data, error } = await supabase.from('company_settings').select('payload').eq('company_id', activeCompanyId).maybeSingle();
+  if (!companyId) return getSettings();
+  const { data, error } = await supabase
+    .from('company_settings')
+    .select('payload')
+    .eq('company_id', companyId)
+    .maybeSingle();
   if (error) throw error;
   return data?.payload ?? getSettings();
 };
 
-export const saveSettingsRemote = async (settings: CompanySettings, activeCompanyId?: string | null) => {
-  const companyId = requireCompany(activeCompanyId);
+export const saveSettingsRemote = async (settings: CompanySettings, companyId?: string | null) => {
+  const scopedCompany = requireCompany(companyId);
   saveSettings(settings);
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from('company_settings').upsert({ company_id: companyId, payload: settings, updated_at: new Date().toISOString() }, { onConflict: 'company_id' });
+  const { error } = await supabase
+    .from('company_settings')
+    .upsert({ company_id: scopedCompany, payload: settings, updated_at: new Date().toISOString() }, { onConflict: 'company_id' });
+  if (error) throw error;
 };
 
-export const seedReferenceLibraryIfNeeded = async (activeCompanyId?: string | null) => {
-  if (!isSupabaseConfigured || !supabase || !activeCompanyId) return;
-  const { data, error } = await supabase.from('reference_library').select('id').eq('company_id', activeCompanyId).limit(1);
-  if (error || data?.length) return;
-  await supabase.from('reference_library').insert(defaultReferenceLibrary.map((item) => ({ id: item.id, company_id: activeCompanyId, payload: item })));
+// ----------------------------- Packaging library ----------------------------
+// Global defaults (user_id null) are shared. Personal additions are private.
+// Each user may hide defaults they don't want and restore them later.
+export interface LibraryView {
+  visible: ReferenceItem[];       // defaults (minus hidden) + own additions
+  hiddenDefaults: ReferenceItem[]; // defaults the user has hidden (restorable)
+  defaultIds: string[];            // ids that are global defaults (hide-able, not deletable by non-superadmin)
+}
+
+const readGlobals = async (): Promise<ReferenceItem[]> => {
+  if (!isSupabaseConfigured || !supabase) return defaultReferenceLibrary;
+  const { data, error } = await supabase.from('reference_library').select('payload').is('user_id', null);
+  if (error) throw error;
+  return (data ?? []).map((r: { payload: ReferenceItem }) => r.payload);
+};
+
+const readOwn = async (userId?: string | null): Promise<ReferenceItem[]> => {
+  if (!isSupabaseConfigured || !supabase) return getOwnLibrary();
+  if (!userId) return [];
+  const { data, error } = await supabase.from('reference_library').select('payload').eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []).map((r: { payload: ReferenceItem }) => r.payload);
+};
+
+const readHiddenIds = async (userId?: string | null): Promise<Set<string>> => {
+  if (!isSupabaseConfigured || !supabase) return new Set(getHiddenDefaults());
+  if (!userId) return new Set();
+  const { data, error } = await supabase.from('hidden_default_items').select('item_id').eq('user_id', userId);
+  if (error) throw error;
+  return new Set((data ?? []).map((r: { item_id: string }) => r.item_id));
+};
+
+export const loadLibraryView = async (userId?: string | null): Promise<LibraryView> => {
+  const [globals, own, hiddenIds] = await Promise.all([readGlobals(), readOwn(userId), readHiddenIds(userId)]);
+  const defaultIds = globals.map((g) => g.id);
+  const visible = [...globals.filter((g) => !hiddenIds.has(g.id)), ...own];
+  const hiddenDefaults = globals.filter((g) => hiddenIds.has(g.id));
+  return { visible, hiddenDefaults, defaultIds };
+};
+
+/** Flat list of the items a user actually sees — used by the estimator. */
+export const loadVisibleReferenceItems = async (userId?: string | null): Promise<ReferenceItem[]> => {
+  return (await loadLibraryView(userId)).visible;
+};
+
+export const addOwnLibraryItem = async (item: ReferenceItem, userId?: string | null) => {
+  if (!isSupabaseConfigured || !supabase) {
+    saveOwnLibrary([...getOwnLibrary(), item]);
+    return;
+  }
+  if (!userId) throw new Error('You must be signed in to add library items.');
+  const { error } = await supabase.from('reference_library').insert({ id: item.id, user_id: userId, payload: item });
+  if (error) throw error;
+};
+
+export const deleteOwnLibraryItem = async (id: string, userId?: string | null) => {
+  if (!isSupabaseConfigured || !supabase) {
+    saveOwnLibrary(getOwnLibrary().filter((i) => i.id !== id));
+    return;
+  }
+  if (!userId) throw new Error('You must be signed in.');
+  const { error } = await supabase.from('reference_library').delete().eq('id', id).eq('user_id', userId);
+  if (error) throw error;
+};
+
+export const hideDefaultItem = async (itemId: string, userId?: string | null) => {
+  if (!isSupabaseConfigured || !supabase) {
+    saveHiddenDefaults([...new Set([...getHiddenDefaults(), itemId])]);
+    return;
+  }
+  if (!userId) throw new Error('You must be signed in.');
+  const { error } = await supabase.from('hidden_default_items').upsert({ user_id: userId, item_id: itemId });
+  if (error) throw error;
+};
+
+export const restoreDefaultItem = async (itemId: string, userId?: string | null) => {
+  if (!isSupabaseConfigured || !supabase) {
+    saveHiddenDefaults(getHiddenDefaults().filter((id) => id !== itemId));
+    return;
+  }
+  if (!userId) throw new Error('You must be signed in.');
+  const { error } = await supabase.from('hidden_default_items').delete().eq('user_id', userId).eq('item_id', itemId);
+  if (error) throw error;
+};
+
+export const restoreAllDefaults = async (userId?: string | null) => {
+  if (!isSupabaseConfigured || !supabase) {
+    saveHiddenDefaults([]);
+    return;
+  }
+  if (!userId) throw new Error('You must be signed in.');
+  const { error } = await supabase.from('hidden_default_items').delete().eq('user_id', userId);
+  if (error) throw error;
+};
+
+// Superadmin only (enforced by RLS): manage the shared global defaults.
+export const addGlobalLibraryItem = async (item: ReferenceItem) => {
+  if (!isSupabaseConfigured || !supabase) throw new Error('Cloud mode required to edit global defaults.');
+  const { error } = await supabase.from('reference_library').insert({ id: item.id, user_id: null, payload: item });
+  if (error) throw error;
+};
+
+export const deleteGlobalLibraryItem = async (id: string) => {
+  if (!isSupabaseConfigured || !supabase) throw new Error('Cloud mode required to edit global defaults.');
+  const { error } = await supabase.from('reference_library').delete().eq('id', id).is('user_id', null);
+  if (error) throw error;
 };

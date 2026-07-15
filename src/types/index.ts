@@ -85,3 +85,30 @@ export interface EstimationResult {
 export interface CompanySettings {
   companyName: string;
 }
+
+export type Role = 'superadmin' | 'admin' | 'member';
+
+export interface CompanyMember {
+  id: string;
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  role: Role;
+}
+
+export interface InviteCode {
+  id: string;
+  code: string;
+  role: 'admin' | 'member';
+  createdAt: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  usedCount: number;
+  active: boolean;
+}
+
+export interface InvitePreview {
+  valid: boolean;
+  companyName: string;
+  role: 'admin' | 'member';
+}

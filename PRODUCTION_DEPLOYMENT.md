@@ -9,7 +9,9 @@ This project can be deployed for free using **Supabase (database)** + **Vercel (
 
 ## 2) Create Supabase project (free)
 1. Create a Supabase account and new project.
-2. Open SQL Editor and run `supabase/schema.sql`.
+2. Apply the migration in `supabase/migrations/` (SQL Editor, CLI, or the GitHub
+   integration). See `SETUP.md` for the full checklist, superadmin creation, and
+   enabling email verification.
 3. In Project Settings → API, copy:
    - `Project URL`
    - `anon public key`

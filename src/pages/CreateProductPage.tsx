@@ -1,7 +1,7 @@
-import { ChangeEvent, useMemo, useState } from 'react';
-import { getReferenceLibrary } from '@/utils/referenceLibraryStorage';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { loadVisibleReferenceItems } from '@/utils/cloudStorage';
 import { estimateProduct } from '@/utils/calculations';
-import { MaterialType, PackagingLayer, PackagingType, Product } from '@/types';
+import { MaterialType, PackagingLayer, PackagingType, Product, ReferenceItem } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 
 const materials: MaterialType[] = ['Cardboard', 'Plastic', 'Paper', 'Glass', 'Aluminium', 'Steel', 'Wood', 'Other'];
@@ -34,7 +34,7 @@ const newLayer = (n: number): PackagingLayer => ({
 const parseCsvRows = (text: string): string[][] => text.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split(',').map((cell) => cell.trim()));
 
 export default function CreateProductPage({ onSave }: { onSave: (p: Product) => void | Promise<void> }) {
-  const { activeCompanyId } = useAuth();
+  const { activeCompanyId, user } = useAuth();
   const [step, setStep] = useState(0);
   const [name, setName] = useState(''); const [category, setCategory] = useState(''); const [sku, setSku] = useState(''); const [quantity, setQuantity] = useState(1);
   const [dimensions, setDimensions] = useState({ length: 0, width: 0, height: 0, unit: 'mm' as const });
@@ -43,7 +43,8 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
   const [extractedRows, setExtractedRows] = useState<ExtractedRow[]>([]);
   const [importMessage, setImportMessage] = useState('');
 
-  const referenceLibrary = useMemo(() => getReferenceLibrary(), []);
+  const [referenceLibrary, setReferenceLibrary] = useState<ReferenceItem[]>([]);
+  useEffect(() => { loadVisibleReferenceItems(user?.id).then(setReferenceLibrary).catch(() => setReferenceLibrary([])); }, [user?.id]);
   const est = useMemo(() => estimateProduct({ id: 'draft', name, category, sku, quantity, dimensions, layers }, referenceLibrary), [name, category, sku, quantity, dimensions, layers, referenceLibrary]);
 
   const updateLayerCount = (count: number) => {

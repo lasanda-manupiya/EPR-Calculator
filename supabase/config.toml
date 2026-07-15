@@ -1,0 +1,8 @@
+# Minimal Supabase CLI config. Links this repo to the hosted project so
+# `supabase link` / `supabase db push` and the GitHub integration can find it.
+project_id = "clzwkajgzgkhweyurrmr"
+
+[db]
+# Local dev port (only used if you run `supabase start` locally).
+port = 54322
+major_version = 15

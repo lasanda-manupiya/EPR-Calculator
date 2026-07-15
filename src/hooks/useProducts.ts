@@ -4,7 +4,7 @@ import { loadProducts, removeProductRemote, upsertProductRemote } from '@/utils/
 import { useAuth } from '@/context/AuthContext';
 
 export const useProducts = () => {
-  const { activeCompanyId } = useAuth();
+  const { activeCompanyId, user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +19,7 @@ export const useProducts = () => {
       ? products.map((p) => (p.id === product.id ? product : p))
       : [product, ...products];
     setProducts(next);
-    await upsertProductRemote(product, activeCompanyId);
+    await upsertProductRemote(product, activeCompanyId, user?.id);
   };
 
   const removeProduct = async (id: string) => {

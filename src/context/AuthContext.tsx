@@ -1,97 +1,76 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { Role } from '@/types';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
-interface Membership {
-  companyId: string;
-  companyName: string;
-  role: 'superadmin' | 'admin' | 'supplier';
+interface SignUpMeta {
+  fullName: string;
+  companyName?: string;
+  inviteCode?: string;
+  gdprConsent: boolean;
 }
 
 interface AuthValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  memberships: Membership[];
+  /** The single company the signed-in user belongs to (null until mapped). */
   activeCompanyId: string | null;
   activeCompanyName: string | null;
-  setActiveCompanyId: (companyId: string | null) => void;
+  role: Role | null;
   isSuperadmin: boolean;
+  isAdmin: boolean; // admin or superadmin
+  emailVerified: boolean;
   authIssue: string | null;
-  signUp: (email: string, password: string, metadata?: { name?: string; companyName?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
+  signUp: (email: string, password: string, meta: SignUpMeta) => Promise<{ needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
+  refreshMembership: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
-const ACTIVE_COMPANY_KEY = 'epr_active_company_id';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(localStorage.getItem(ACTIVE_COMPANY_KEY));
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [authIssue, setAuthIssue] = useState<string | null>(null);
 
-  const setActiveCompanyId = (companyId: string | null) => {
-    setActiveCompanyIdState(companyId);
-    if (companyId) localStorage.setItem(ACTIVE_COMPANY_KEY, companyId);
-    else localStorage.removeItem(ACTIVE_COMPANY_KEY);
-  };
-
-  const loadMemberships = async (userId?: string) => {
+  const loadMembership = async (userId?: string) => {
     if (!supabase || !userId) {
-      setMemberships([]);
-      setActiveCompanyId(null);
+      setCompanyId(null);
+      setCompanyName(null);
+      setRole(null);
       return;
     }
-
+    // One membership row per user. Parameterised query — no string building.
     const { data, error } = await supabase
-      .from('company_admins')
+      .from('company_members')
       .select('role, company_id, companies!inner(name)')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .maybeSingle();
 
     if (error) {
-      setMemberships([]);
-      setActiveCompanyId(null);
-      setAuthIssue(`Failed to load company memberships: ${error.message}`);
+      setCompanyId(null);
+      setCompanyName(null);
+      setRole(null);
+      setAuthIssue(`Failed to load your company: ${error.message}`);
       return;
     }
-
-    const next = (data ?? []).map((row: { role: Membership['role']; company_id: string; companies: { name: string } | { name: string }[] }) => ({
-      role: row.role,
-      companyId: row.company_id,
-      companyName: Array.isArray(row.companies) ? row.companies[0]?.name ?? 'Unknown company' : row.companies.name,
-    }));
-
-    setMemberships(next);
-    const isSuper = next.some((m) => m.role === 'superadmin');
-    const hasCurrent = !!activeCompanyId && next.some((m) => m.companyId === activeCompanyId);
-
-    if (hasCurrent) {
-      setAuthIssue(null);
+    if (!data) {
+      setCompanyId(null);
+      setCompanyName(null);
+      setRole(null);
+      setAuthIssue('Your account is not linked to a company yet. Ask your company admin for an invite code, or register a new company.');
       return;
     }
-
-    if (next.length === 1) {
-      setActiveCompanyId(next[0].companyId);
-      setAuthIssue(null);
-      return;
-    }
-
-    if (isSuper && next.length > 1) {
-      setActiveCompanyId(null);
-      setAuthIssue('Select an active company to continue.');
-      return;
-    }
-
-    if (!next.length) {
-      setActiveCompanyId(null);
-      setAuthIssue('Your account has no company mapping yet. Contact your superadmin.');
-      return;
-    }
-
-    setActiveCompanyId(next[0].companyId);
+    const companies = data.companies as { name: string } | { name: string }[];
+    setCompanyId(data.company_id);
+    setCompanyName(Array.isArray(companies) ? companies[0]?.name ?? null : companies.name);
+    setRole(data.role as Role);
     setAuthIssue(null);
   };
 
@@ -102,18 +81,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      void loadMemberships(data.session?.user?.id).finally(() => setLoading(false));
+      void loadMembership(data.session?.user?.id).finally(() => setLoading(false));
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      void loadMemberships(nextSession?.user?.id).finally(() => setLoading(false));
+      void loadMembership(nextSession?.user?.id).finally(() => setLoading(false));
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const signUp: AuthValue['signUp'] = async (email, password, metadata) => {
+  const signUp: AuthValue['signUp'] = async (email, password, meta) => {
     if (!supabase) throw new Error('Supabase auth is not configured.');
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name: metadata?.name, company_name: metadata?.companyName } } });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: meta.fullName,
+          company_name: meta.companyName ?? null,
+          invite_code: meta.inviteCode ?? null,
+          gdpr_consent: meta.gdprConsent ? 'true' : 'false',
+        },
+      },
+    });
     if (error) throw error;
     return { needsEmailConfirmation: !data.session };
   };
@@ -130,12 +120,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
-  const isSuperadmin = memberships.some((m) => m.role === 'superadmin');
-  const activeCompanyName = memberships.find((m) => m.companyId === activeCompanyId)?.companyName ?? null;
+  const resendVerification = async (email: string) => {
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    if (error) throw error;
+  };
+
+  const refreshMembership = async () => {
+    await loadMembership(session?.user?.id);
+  };
+
+  const user = session?.user ?? null;
+  const emailVerified = Boolean(user?.email_confirmed_at || (user as User & { confirmed_at?: string })?.confirmed_at);
+  const isSuperadmin = role === 'superadmin';
+  const isAdmin = role === 'admin' || role === 'superadmin';
 
   const value = useMemo(
-    () => ({ user: session?.user ?? null, session, loading, signUp, signIn, signOut, memberships, activeCompanyId, activeCompanyName, setActiveCompanyId, isSuperadmin, authIssue }),
-    [session, loading, memberships, activeCompanyId, activeCompanyName, isSuperadmin, authIssue],
+    () => ({
+      user,
+      session,
+      loading,
+      activeCompanyId: companyId,
+      activeCompanyName: companyName,
+      role,
+      isSuperadmin,
+      isAdmin,
+      emailVerified,
+      authIssue,
+      signUp,
+      signIn,
+      signOut,
+      resendVerification,
+      refreshMembership,
+    }),
+    [session, loading, companyId, companyName, role, isSuperadmin, isAdmin, emailVerified, authIssue],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
