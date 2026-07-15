@@ -91,7 +91,14 @@ create table if not exists public.hidden_default_items (
 -- ---------------------------------------------------------------------------
 -- Helper functions (SECURITY DEFINER so RLS policies don't recurse on
 -- company_members, and so search_path is pinned against injection).
+-- Drop first so re-running over an older schema (which used different
+-- parameter names) can't fail with "cannot change name of input parameter".
 -- ---------------------------------------------------------------------------
+drop function if exists public.can_access_company(uuid) cascade;
+drop function if exists public.is_superadmin() cascade;
+drop function if exists public.is_company_admin(uuid) cascade;
+drop function if exists public.my_company_id() cascade;
+
 create or replace function public.is_superadmin() returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
