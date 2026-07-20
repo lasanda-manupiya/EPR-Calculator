@@ -34,9 +34,11 @@ const newLayer = (n: number): PackagingLayer => ({
 
 const parseCsvRows = (text: string): string[][] => text.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split(',').map((cell) => cell.trim()));
 
-export default function CreateProductPage({ onSave }: { onSave: (p: Product) => void | Promise<void> }) {
+export default function CreateProductPage({ onSave, products }: { onSave: (p: Product) => void | Promise<void>; products: Product[] }) {
   const { activeCompanyId, user } = useAuth();
   const nav = useNavigate();
+  const categories = useMemo(() => [...new Set(products.map((p) => p.category?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [products]);
+  const [fileName, setFileName] = useState('');
   const [step, setStep] = useState(0);
   const [name, setName] = useState(''); const [category, setCategory] = useState(''); const [sku, setSku] = useState(''); const [quantity, setQuantity] = useState(1);
   const [dimensions, setDimensions] = useState({ length: 0, width: 0, height: 0, unit: 'mm' as const });
@@ -129,7 +131,7 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
     onSave({
       id: crypto.randomUUID(),
       name: row.product_name,
-      category,
+      category: category.trim(),
       sku,
       quantity,
       dimensions: rowDimensions,
@@ -161,7 +163,7 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
     setSaveError('');
     setSaveStatus('saving');
     try {
-      await onSave({ id: crypto.randomUUID(), name, category, sku, quantity, dimensions, layers: layeredForSave, estimation: est, createdAt: new Date().toISOString() });
+      await onSave({ id: crypto.randomUUID(), name: name.trim(), category: category.trim(), sku: sku.trim(), quantity, dimensions, layers: layeredForSave, estimation: est, createdAt: new Date().toISOString() });
       setSaveStatus('saved');
       setTimeout(() => nav('/products'), 1100);
     } catch (err) {
@@ -174,8 +176,30 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
     <div className="grid md:grid-cols-5 gap-2">{steps.map((s, i) => <div key={s} className={`px-3 py-2 rounded text-xs font-medium ${i === step ? 'bg-eco text-white' : 'bg-white'}`}>{i + 1}. {s}</div>)}</div>
     <div className="bg-white rounded-xl p-5 shadow space-y-4">
       {!activeCompanyId && <p className="text-amber-700 text-sm">Select an active company before creating or editing records.</p>}
-      {step === 0 && <div className="space-y-5"><div><h3 className="font-semibold mb-3">Item Details</h3><div className="grid md:grid-cols-2 gap-3"><input className="border p-2 rounded" placeholder="Item name" value={name} onChange={e => setName(e.target.value)} /><input className="border p-2 rounded" placeholder="Item category" value={category} onChange={e => setCategory(e.target.value)} /><input className="border p-2 rounded" placeholder="SKU or internal reference" value={sku} onChange={e => setSku(e.target.value)} /><input className="border p-2 rounded" type="number" placeholder="Quantity placed on market" value={quantity} onChange={e => setQuantity(Number(e.target.value) || 1)} /></div></div>
-      <div className="border rounded-lg p-4 bg-slate-50 space-y-3"><h4 className="font-semibold">Auto analysis import (CSV / Excel-exported CSV)</h4><p className="text-sm text-slate-600">Use the exact template format only: <span className="font-mono">{IMPORT_HEADERS.join(', ')}</span>. Excel files should be exported to CSV before upload.</p><div className="flex flex-wrap gap-2"><button type="button" onClick={handleTemplateDownload} className="px-3 py-2 border rounded">Download template</button><input type="file" accept=".csv,.xlsx,.xls" onChange={handleImport} className="text-sm" /></div>{importMessage && <p className="text-sm text-slate-700">{importMessage}</p>}
+      {step === 0 && <div className="space-y-5"><div><h3 className="font-semibold mb-3">Item Details</h3><div className="grid md:grid-cols-2 gap-3"><input className="border p-2 rounded" placeholder="Item name" value={name} onChange={e => setName(e.target.value)} /><div><input list="category-options" className="border p-2 rounded w-full" placeholder="Item category (pick existing or type new)" value={category} onChange={e => setCategory(e.target.value)} /><datalist id="category-options">{categories.map((c) => <option key={c} value={c} />)}</datalist></div><input className="border p-2 rounded" placeholder="SKU or internal reference" value={sku} onChange={e => setSku(e.target.value)} /><input className="border p-2 rounded" type="number" placeholder="Quantity placed on market" value={quantity} onChange={e => setQuantity(Number(e.target.value) || 1)} /></div></div>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-eco/10 text-eco">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+          </div>
+          <div>
+            <h4 className="font-semibold text-slate-800">Auto-fill from a spreadsheet</h4>
+            <p className="text-sm text-slate-500">Upload a CSV to extract products automatically. Required columns: <code className="rounded border bg-white px-1.5 py-0.5 text-xs font-mono text-slate-700">{IMPORT_HEADERS.join(', ')}</code>. Export Excel to CSV first.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={handleTemplateDownload} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+            Download template
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-eco px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+            Choose CSV file
+            <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { setFileName(e.target.files?.[0]?.name ?? ''); handleImport(e); }} />
+          </label>
+          <span className="text-sm text-slate-500">{fileName || 'No file selected'}</span>
+        </div>
+        {importMessage && <p className="rounded-lg bg-eco/10 px-3 py-2 text-sm text-slate-700">{importMessage}</p>}
       {extractedRows.length > 0 && <div className="space-y-2"><p className="text-sm font-medium">Extracted details (editable + verify):</p><div className="overflow-auto"><table className="w-full text-xs border"><thead className="bg-white"><tr>{['Product Name', 'Length (mm)', 'Width (mm)', 'Height (mm)', 'Action'].map((h) => <th key={h} className="border p-2 text-left">{h}</th>)}</tr></thead><tbody>{extractedRows.map((row) => <tr key={row.id}><td className="border p-1"><input className="w-full border rounded p-1" value={row.product_name} onChange={(e) => setExtractedRows((prev) => prev.map((r) => r.id === row.id ? { ...r, product_name: e.target.value } : r))} /></td><td className="border p-1"><input className="w-full border rounded p-1" type="number" value={row.length_mm} onChange={(e) => setExtractedRows((prev) => prev.map((r) => r.id === row.id ? { ...r, length_mm: Number(e.target.value) || 0 } : r))} /></td><td className="border p-1"><input className="w-full border rounded p-1" type="number" value={row.width_mm} onChange={(e) => setExtractedRows((prev) => prev.map((r) => r.id === row.id ? { ...r, width_mm: Number(e.target.value) || 0 } : r))} /></td><td className="border p-1"><input className="w-full border rounded p-1" type="number" value={row.height_mm} onChange={(e) => setExtractedRows((prev) => prev.map((r) => r.id === row.id ? { ...r, height_mm: Number(e.target.value) || 0 } : r))} /></td><td className="border p-1"><button type="button" className="px-2 py-1 bg-eco text-white rounded" onClick={() => verifyExtractedRow(row)}>Verify & Apply</button></td></tr>)}</tbody></table></div></div>}
       </div></div>}
       {step === 1 && <div><h3 className="font-semibold mb-3">Item Size</h3><div className="grid md:grid-cols-4 gap-3">{(['length', 'width', 'height'] as const).map(k => <input key={k} className="border p-2 rounded" type="number" placeholder={`Item ${k}`} value={dimensions[k]} onChange={e => setDimensions({ ...dimensions, [k]: Number(e.target.value) })} />)}<select className="border p-2 rounded" value={dimensions.unit} onChange={e => setDimensions({ ...dimensions, unit: e.target.value as 'mm' })}><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option></select></div></div>}

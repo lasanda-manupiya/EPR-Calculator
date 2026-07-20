@@ -50,7 +50,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage products={products} />} />
         <Route path="/products" element={<ProductsPage products={products} onDelete={removeProduct} />} />
-        <Route path="/create-product" element={<CreateProductPage onSave={upsertProduct} />} />
+        <Route path="/create-product" element={<CreateProductPage onSave={upsertProduct} products={products} />} />
         <Route path="/packaging-library" element={<PackagingLibraryPage />} />
         <Route path="/reports" element={<ReportsPage products={products} />} />
         <Route path="/settings" element={<SettingsPage />} />
