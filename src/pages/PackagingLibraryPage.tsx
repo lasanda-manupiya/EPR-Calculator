@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MaterialType, PackagingType, ReferenceItem } from '@/types';
+import { MaterialType, PackagingType, ReferenceItem, Unit } from '@/types';
 import {
   addGlobalLibraryItem,
   addOwnLibraryItem,
@@ -18,6 +18,7 @@ const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
 };
 
 const materials: MaterialType[] = ['Cardboard', 'Plastic', 'Paper', 'Glass', 'Aluminium', 'Steel', 'Wood', 'Other'];
+const dimSamples: Record<'length' | 'width' | 'height', number> = { length: 120, width: 90, height: 60 };
 
 export default function PackagingLibraryPage() {
   const { user, isSuperadmin } = useAuth();
@@ -108,12 +109,25 @@ export default function PackagingLibraryPage() {
       <div className="bg-white rounded-xl p-4 shadow space-y-3">
         <h3 className="font-semibold">Add a reference</h3>
         <div className="grid md:grid-cols-4 gap-2">
-          <input className="border rounded px-3 py-2" placeholder="Reference name" value={form.referenceName} onChange={(e) => setForm({ ...form, referenceName: e.target.value })} />
+          <input className="border rounded px-3 py-2" placeholder="e.g. Cardboard primary box" value={form.referenceName} onChange={(e) => setForm({ ...form, referenceName: e.target.value })} />
           <select className="border rounded px-3 py-2" value={form.materialType} onChange={(e) => setForm({ ...form, materialType: e.target.value as MaterialType })}>{materials.map((m) => <option key={m}>{m}</option>)}</select>
           <select className="border rounded px-3 py-2" value={form.packagingType} onChange={(e) => setForm({ ...form, packagingType: e.target.value as PackagingType })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="tertiary">Tertiary</option></select>
-          <input className="border rounded px-3 py-2" type="number" placeholder="Avg weight (g)" value={form.averageWeight} onChange={(e) => setForm({ ...form, averageWeight: Number(e.target.value) || 0 })} />
-          {(['length', 'width', 'height'] as const).map((k) => <input key={k} className="border rounded px-3 py-2" type="number" placeholder={k} value={form[k]} onChange={(e) => setForm({ ...form, [k]: Number(e.target.value) || 0 })} />)}
-          <input className="border rounded px-3 py-2 md:col-span-2" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <div className="relative">
+            <input className="border rounded px-3 py-2 w-full pr-8" type="number" placeholder="Avg weight e.g. 45" value={form.averageWeight || ''} onChange={(e) => setForm({ ...form, averageWeight: Number(e.target.value) || 0 })} />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">g</span>
+          </div>
+          {(['length', 'width', 'height'] as const).map((k) => (
+            <div key={k} className="relative">
+              <input className="border rounded px-3 py-2 w-full pr-10" type="number" placeholder={`${k.charAt(0).toUpperCase() + k.slice(1)} e.g. ${dimSamples[k]}`} value={form[k] || ''} onChange={(e) => setForm({ ...form, [k]: Number(e.target.value) || 0 })} />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{form.unit}</span>
+            </div>
+          ))}
+          <select className="border rounded px-3 py-2" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value as Unit })}>
+            <option value="mm">Millimetres (mm)</option>
+            <option value="cm">Centimetres (cm)</option>
+            <option value="m">Metres (m)</option>
+          </select>
+          <input className="border rounded px-3 py-2 md:col-span-4" placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
         <div className="flex items-center gap-3">
           <button className="px-3 py-2 bg-eco text-white rounded" onClick={submit}>Add reference</button>

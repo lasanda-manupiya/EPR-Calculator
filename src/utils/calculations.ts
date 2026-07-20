@@ -33,15 +33,12 @@ export const estimateLayer = (
     return diff < bestDiff ? curr : best;
   });
 
-  // Scale the estimate by the product's size using the reference's density
-  // (weight per volume) so a bigger/smaller product doesn't just inherit the
-  // reference's flat weight. Fall back to the reference weight if density is
-  // unavailable.
+  // Scale the estimate by the product's size relative to the matched reference,
+  // so a bigger/smaller product doesn't just inherit the reference's flat
+  // weight. Volumes are unit-normalised to mm, so references entered in cm/m are
+  // handled correctly. Falls back to the reference weight if it has no volume.
   const refVolume = volume(closest.length, closest.width, closest.height, closest.unit);
-  const density = closest.densityValue && closest.densityValue > 0
-    ? closest.densityValue
-    : (refVolume ? closest.averageWeight / refVolume : 0);
-  const scaled = density > 0 ? density * productVolume : closest.averageWeight;
+  const scaled = refVolume ? closest.averageWeight * (productVolume / refVolume) : closest.averageWeight;
   const estimatedWeightPerUnit = Math.round(scaled * 100) / 100;
 
   return {
