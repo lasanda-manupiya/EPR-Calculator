@@ -1,10 +1,16 @@
-import { Product } from '@/types';
+import { ConfidenceLevel, Product } from '@/types';
+import SubmissionNotice from '@/components/SubmissionNotice';
 
 export default function ReportsPage({ products }: { products: Product[] }) {
   const materialTotals: Record<string, number> = {};
   const typeTotals: Record<string, number> = {};
   const warnings = new Set<string>();
   const assumptions: string[] = [];
+
+  const confScore = { High: 3, Medium: 2, Low: 1 } as const;
+  const allLayers = products.flatMap((p) => p.layers);
+  const avgScore = allLayers.length ? allLayers.reduce((s, l) => s + confScore[l.confidenceLevel ?? 'Low'], 0) / allLayers.length : 0;
+  const avgConfidence: ConfidenceLevel = avgScore >= 2.5 ? 'High' : avgScore >= 1.5 ? 'Medium' : 'Low';
 
   products.forEach((p) => {
     Object.entries(p.estimation.materialBreakdown).forEach(([k, v]) => (materialTotals[k] = (materialTotals[k] || 0) + v));
@@ -24,6 +30,7 @@ export default function ReportsPage({ products }: { products: Product[] }) {
   };
 
   return <div className="space-y-5"><h2 className="text-2xl font-semibold">Reports</h2>
+    <SubmissionNotice confidence={products.length ? avgConfidence : null} count={products.length} />
     <div className="bg-white p-5 rounded-xl shadow space-y-3"><p>Items assessed: {products.length}</p>
       <div><h3 className="font-semibold">Weight by material</h3>{Object.entries(materialTotals).map(([k, v]) => <p key={k}>{k}: {v.toFixed(2)} g</p>)}</div>
       <div><h3 className="font-semibold">Weight by packaging type</h3>{Object.entries(typeTotals).map(([k, v]) => <p key={k}>{k}: {v.toFixed(2)} g</p>)}</div>

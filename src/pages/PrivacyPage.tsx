@@ -9,7 +9,7 @@ export default function PrivacyPage() {
 
         <section className="space-y-1">
           <h2 className="font-semibold text-slate-900">Who is the data controller</h2>
-          <p>SustainZone is the controller of the personal data processed in this application. For any data request, contact <a className="text-emerald-700 underline" href="mailto:privacy@sustainzone.co.uk">privacy@sustainzone.co.uk</a>.</p>
+          <p>SustainZone is the controller of the personal data processed in this application. For any data request, contact <a className="text-emerald-700 underline" href="mailto:connect@sustainzone.earth">connect@sustainzone.earth</a>.</p>
         </section>
 
         <section className="space-y-1">
