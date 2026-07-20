@@ -5,17 +5,19 @@ import { BrandLogo, LeafMark } from '@/components/BrandLogo';
 import { REMEMBER_KEY } from '@/lib/supabase';
 
 export default function SignInPage() {
-  const { signIn, resendVerification } = useAuth();
+  const { signIn, resendVerification, loginOtpEnabled, passwordThenSendOtp, resendLoginOtp, verifyLoginOtp } = useAuth();
   const nav = useNavigate();
+  const [stage, setStage] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [needsVerify, setNeedsVerify] = useState(false);
   const [remember, setRemember] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const onSubmit = async (e: FormEvent) => {
+  const onSubmitCredentials = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
@@ -24,8 +26,14 @@ export default function SignInPage() {
     try {
       // Route session storage before authenticating.
       try { window.localStorage.setItem(REMEMBER_KEY, remember ? '1' : '0'); } catch { /* ignore */ }
-      await signIn(email, password);
-      nav('/');
+      if (loginOtpEnabled) {
+        await passwordThenSendOtp(email, password);
+        setStage('otp');
+        setNotice('We emailed a 6-digit code to confirm this sign-in. Enter it below to continue.');
+      } else {
+        await signIn(email, password);
+        nav('/');
+      }
     } catch (err) {
       const msg = (err as Error).message;
       if (/confirm|verif/i.test(msg)) {
@@ -39,7 +47,21 @@ export default function SignInPage() {
     }
   };
 
-  const resend = async () => {
+  const onSubmitOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await verifyLoginOtp(email, otp.trim());
+      nav('/');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resendSignupVerification = async () => {
     setError('');
     setNotice('');
     try {
@@ -50,9 +72,20 @@ export default function SignInPage() {
     }
   };
 
+  const resendCode = async () => {
+    setError('');
+    setNotice('');
+    try {
+      await resendLoginOtp(email);
+      setNotice('A new code has been sent to your email.');
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-emerald-50 p-6">
-      <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-4">
         <div className="flex justify-center mb-2">
           <BrandLogo
             src="/epr-calculator-logo.png"
@@ -61,23 +94,40 @@ export default function SignInPage() {
             fallback={<div className="flex items-center gap-2"><LeafMark className="h-10 w-10" /><span className="text-lg font-bold text-slate-800">EPR Calculator</span></div>}
           />
         </div>
-        <h1 className="text-2xl font-bold">Sign in</h1>
-        <p className="text-sm text-slate-500">Sign in to your SustainZone EPR account.</p>
+
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {notice && <p className="text-emerald-700 text-sm">{notice}</p>}
-        {needsVerify && (
-          <button type="button" onClick={resend} className="text-sm text-emerald-700 underline">Resend verification email</button>
+
+        {stage === 'credentials' ? (
+          <form onSubmit={onSubmitCredentials} className="space-y-4">
+            <h1 className="text-2xl font-bold">Sign in</h1>
+            <p className="text-sm text-slate-500">Sign in to your SustainZone EPR account.</p>
+            {needsVerify && (
+              <button type="button" onClick={resendSignupVerification} className="text-sm text-emerald-700 underline">Resend verification email</button>
+            )}
+            <input required type="email" className="w-full border rounded-lg p-2" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input required type="password" className="w-full border rounded-lg p-2" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              Keep me signed in for 30 days
+            </label>
+            <button disabled={submitting} className="w-full bg-emerald-600 text-white rounded-lg py-2 font-medium disabled:opacity-60">{submitting ? 'Please wait...' : 'Sign in'}</button>
+            <p className="text-sm">No account? <Link to="/register" className="text-emerald-700">Register here</Link></p>
+            <p className="text-xs text-slate-400"><Link to="/privacy" className="underline">Privacy Policy</Link></p>
+          </form>
+        ) : (
+          <form onSubmit={onSubmitOtp} className="space-y-4">
+            <h1 className="text-2xl font-bold">Confirm your sign-in</h1>
+            <p className="text-sm text-slate-500">For your security, we emailed a 6-digit code to <span className="font-medium">{email}</span>. Enter it to finish signing in.</p>
+            <input required inputMode="numeric" autoFocus className="w-full border rounded-lg p-2 tracking-[0.4em] text-center text-lg" placeholder="000000" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} />
+            <button disabled={submitting} className="w-full bg-emerald-600 text-white rounded-lg py-2 font-medium disabled:opacity-60">{submitting ? 'Verifying...' : 'Verify and sign in'}</button>
+            <div className="flex justify-between text-sm">
+              <button type="button" onClick={resendCode} className="text-emerald-700 underline">Resend code</button>
+              <button type="button" onClick={() => { setStage('credentials'); setOtp(''); setError(''); setNotice(''); }} className="text-slate-500 underline">Start over</button>
+            </div>
+          </form>
         )}
-        <input required type="email" className="w-full border rounded-lg p-2" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input required type="password" className="w-full border rounded-lg p-2" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          Keep me signed in for 30 days
-        </label>
-        <button disabled={submitting} className="w-full bg-emerald-600 text-white rounded-lg py-2 font-medium disabled:opacity-60">{submitting ? 'Signing in...' : 'Sign in'}</button>
-        <p className="text-sm">No account? <Link to="/register" className="text-emerald-700">Register here</Link></p>
-        <p className="text-xs text-slate-400"><Link to="/privacy" className="underline">Privacy Policy</Link></p>
-      </form>
+      </div>
     </div>
   );
 }

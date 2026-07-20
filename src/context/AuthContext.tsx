@@ -27,7 +27,17 @@ interface AuthValue {
   signOut: () => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
   refreshMembership: () => Promise<void>;
+  /** When true, sign-in requires an emailed one-time code (2FA). */
+  loginOtpEnabled: boolean;
+  /** Verify the password, then email a one-time login code. No session is granted yet. */
+  passwordThenSendOtp: (email: string, password: string) => Promise<void>;
+  /** Re-send the one-time login code. */
+  resendLoginOtp: (email: string) => Promise<void>;
+  /** Complete sign-in by verifying the emailed code. */
+  verifyLoginOtp: (email: string, token: string) => Promise<void>;
 }
+
+const LOGIN_OTP_ENABLED = import.meta.env.VITE_LOGIN_OTP === 'on';
 
 const AuthContext = createContext<AuthValue | null>(null);
 
@@ -126,6 +136,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
+  // ---- Email 2FA on login (flag-gated) ----
+  // 1) verify the password (fails on wrong password / unconfirmed email),
+  // 2) drop that session so no access is granted yet,
+  // 3) email a one-time code. A session is only created after verifyLoginOtp.
+  const passwordThenSendOtp = async (email: string, password: string) => {
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await supabase.auth.signOut();
+    const { error: otpErr } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if (otpErr) throw otpErr;
+  };
+
+  const resendLoginOtp = async (email: string) => {
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if (error) throw error;
+  };
+
+  const verifyLoginOtp = async (email: string, token: string) => {
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+    if (error) throw error;
+  };
+
   const refreshMembership = async () => {
     await loadMembership(session?.user?.id);
   };
@@ -152,6 +187,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signOut,
       resendVerification,
       refreshMembership,
+      loginOtpEnabled: LOGIN_OTP_ENABLED,
+      passwordThenSendOtp,
+      resendLoginOtp,
+      verifyLoginOtp,
     }),
     [session, loading, companyId, companyName, role, isSuperadmin, isAdmin, emailVerified, authIssue],
   );
