@@ -11,6 +11,18 @@ export default function TeamPage() {
   const [maxUses, setMaxUses] = useState('');
   const [error, setError] = useState('');
   const [lastCode, setLastCode] = useState('');
+  const [copied, setCopied] = useState('');
+
+  const inviteLink = (code: string) => `${window.location.origin}/register?invite=${code}`;
+  const copyLink = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(inviteLink(code));
+      setCopied(code);
+      setTimeout(() => setCopied(''), 1500);
+    } catch {
+      setError('Could not copy to clipboard — copy the link manually.');
+    }
+  };
 
   const refresh = useCallback(async () => {
     if (!supabase || !activeCompanyId) return;
@@ -91,7 +103,16 @@ export default function TeamPage() {
           </label>
           <button className="px-3 py-2 bg-emerald-600 text-white rounded" onClick={generateCode}>Generate code</button>
         </div>
-        {lastCode && <p className="text-sm">New code: <span className="font-mono font-bold text-lg">{lastCode}</span> — share it securely.</p>}
+        {lastCode && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+            <p className="text-sm">Code: <span className="font-mono font-bold text-lg">{lastCode}</span></p>
+            <p className="text-xs text-slate-600">Share this link — the invitee just sets a password and joins your company:</p>
+            <div className="flex items-center gap-2">
+              <input readOnly value={inviteLink(lastCode)} className="flex-1 border rounded px-2 py-1 text-sm bg-white" onFocus={(e) => e.target.select()} />
+              <button type="button" className="px-3 py-1 bg-emerald-600 text-white rounded text-sm" onClick={() => copyLink(lastCode)}>{copied === lastCode ? 'Copied!' : 'Copy link'}</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-auto">
@@ -126,7 +147,10 @@ export default function TeamPage() {
                 <td className="text-center capitalize">{c.role}</td>
                 <td className="text-center">{c.usedCount}{c.maxUses ? ` / ${c.maxUses}` : ''}</td>
                 <td className="text-center">{c.active ? <span className="text-emerald-700">active</span> : <span className="text-slate-400">disabled</span>}</td>
-                <td className="text-center">{c.active && <button className="text-red-600 hover:underline" onClick={() => deactivate(c.id)}>Disable</button>}</td>
+                <td className="text-center space-x-3">
+                  {c.active && <button className="text-emerald-700 hover:underline" onClick={() => copyLink(c.code)}>{copied === c.code ? 'Copied!' : 'Copy link'}</button>}
+                  {c.active && <button className="text-red-600 hover:underline" onClick={() => deactivate(c.id)}>Disable</button>}
+                </td>
               </tr>
             ))}
           </tbody>

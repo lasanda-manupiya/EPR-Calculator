@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -13,6 +13,7 @@ const passwordProblem = (pw: string): string | null => {
 
 export default function RegisterPage() {
   const { signUp } = useAuth();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<Mode>('create');
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -26,14 +27,26 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const checkInvite = async () => {
+  const checkInvite = async (codeArg?: string) => {
     setInvitePreview('');
-    if (!supabase || !inviteCode.trim()) return;
-    const { data } = await supabase.rpc('preview_invite_code', { p_code: inviteCode.trim() });
+    const code = (codeArg ?? inviteCode).trim();
+    if (!supabase || !code) return;
+    const { data } = await supabase.rpc('preview_invite_code', { p_code: code });
     const row = Array.isArray(data) ? data[0] : data;
     if (row?.valid) setInvitePreview(`✓ Valid — joins "${row.company_name}" as ${row.member_role}.`);
     else setInvitePreview('✗ This invite code is invalid or expired.');
   };
+
+  // Pre-fill from an invite link, e.g. /register?invite=ABC12345
+  useEffect(() => {
+    const code = searchParams.get('invite');
+    if (code) {
+      setMode('join');
+      setInviteCode(code.toUpperCase());
+      void checkInvite(code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -101,7 +114,7 @@ export default function RegisterPage() {
           <input required className="w-full border rounded-lg p-2" placeholder="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
         ) : (
           <div>
-            <input required className="w-full border rounded-lg p-2" placeholder="Invite code" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} onBlur={checkInvite} />
+            <input required className="w-full border rounded-lg p-2" placeholder="Invite code" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} onBlur={() => checkInvite()} />
             {invitePreview && <p className={`text-xs mt-1 ${invitePreview.startsWith('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{invitePreview}</p>}
           </div>
         )}

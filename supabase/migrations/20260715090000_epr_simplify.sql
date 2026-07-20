@@ -334,7 +334,8 @@ begin
   if p_role = 'admin' and not public.is_superadmin() then
     raise exception 'Only the superadmin can invite admins.';
   end if;
-  v_code := upper(substr(encode(gen_random_bytes(6), 'hex'), 1, 8));
+  -- gen_random_uuid() is built-in (pg_catalog); avoids pgcrypto/search_path issues.
+  v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
   insert into public.invite_codes (company_id, code, role, created_by, expires_at, max_uses)
   values (v_company, v_code, p_role, auth.uid(), p_expires_at, p_max_uses);
   return v_code;
