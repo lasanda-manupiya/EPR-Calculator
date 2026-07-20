@@ -24,14 +24,13 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex bg-slate-100">
       <aside className="fixed left-0 top-0 h-full w-72 bg-slate-950 text-white p-6 shadow-2xl overflow-y-auto">
-        <div className="mb-4">
+        <div className="mb-4 rounded-xl bg-white p-3 flex items-center justify-center">
           <BrandLogo
-            src="/sustainzone-logo.png"
-            alt="SustainZone"
-            className="h-9 w-auto mb-1"
-            fallback={<div className="flex items-center gap-2"><LeafMark className="h-8 w-8" /><span className="text-xl font-bold tracking-tight">SustainZone</span></div>}
+            src="/epr-calculator-logo.png"
+            alt="EPR Calculator by SustainZone"
+            className="h-16 w-auto"
+            fallback={<div className="flex items-center gap-2"><LeafMark className="h-9 w-9" /><span className="text-slate-900 font-bold">EPR Calculator</span></div>}
           />
-          <p className="text-sm font-semibold text-eco">EPR Calculator</p>
         </div>
         <p className="text-xs text-slate-300">{user?.email}</p>
         <p className="text-xs text-slate-400 mb-4">
