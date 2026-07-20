@@ -1,7 +1,7 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { Role } from '@/types';
-import { isSupabaseConfigured, supabase, supabaseAuthCheck } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 interface SignUpMeta {
   fullName: string;
@@ -48,6 +48,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [authIssue, setAuthIssue] = useState<string | null>(null);
+  // While true, ignore the transient session created by the password check
+  // during login 2FA (the user isn't fully signed in until the code is verified).
+  const suppressSignInRef = useRef(false);
 
   const loadMembership = async (userId?: string) => {
     if (!supabase || !userId) {
@@ -94,6 +97,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       void loadMembership(data.session?.user?.id).finally(() => setLoading(false));
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      // Ignore the brief SIGNED_IN from the login-2FA password check.
+      if (suppressSignInRef.current && _event === 'SIGNED_IN') return;
       setSession(nextSession);
       void loadMembership(nextSession?.user?.id).finally(() => setLoading(false));
     });
@@ -141,14 +146,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // 2) drop that session so no access is granted yet,
   // 3) email a one-time code. A session is only created after verifyLoginOtp.
   const passwordThenSendOtp = async (email: string, password: string) => {
-    if (!supabase || !supabaseAuthCheck) throw new Error('Supabase auth is not configured.');
-    // Verify the password on the throwaway client so the main app's session
-    // (and UI) never changes until the emailed code is verified.
-    const { error } = await supabaseAuthCheck.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    await supabaseAuthCheck.auth.signOut();
-    const { error: otpErr } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-    if (otpErr) throw otpErr;
+    if (!supabase) throw new Error('Supabase auth is not configured.');
+    // Suppress the transient sign-in so the app stays on the sign-in screen
+    // until the emailed code is verified.
+    suppressSignInRef.current = true;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { suppressSignInRef.current = false; throw error; }
+      await supabase.auth.signOut();
+      const { error: otpErr } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      if (otpErr) throw otpErr;
+    } catch (err) {
+      suppressSignInRef.current = false;
+      throw err;
+    }
   };
 
   const resendLoginOtp = async (email: string) => {
@@ -159,6 +170,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const verifyLoginOtp = async (email: string, token: string) => {
     if (!supabase) throw new Error('Supabase auth is not configured.');
+    // Allow the resulting sign-in to take effect.
+    suppressSignInRef.current = false;
     const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) throw error;
   };
