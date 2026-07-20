@@ -33,12 +33,23 @@ export const estimateLayer = (
     return diff < bestDiff ? curr : best;
   });
 
+  // Scale the estimate by the product's size using the reference's density
+  // (weight per volume) so a bigger/smaller product doesn't just inherit the
+  // reference's flat weight. Fall back to the reference weight if density is
+  // unavailable.
+  const refVolume = volume(closest.length, closest.width, closest.height, closest.unit);
+  const density = closest.densityValue && closest.densityValue > 0
+    ? closest.densityValue
+    : (refVolume ? closest.averageWeight / refVolume : 0);
+  const scaled = density > 0 ? density * productVolume : closest.averageWeight;
+  const estimatedWeightPerUnit = Math.round(scaled * 100) / 100;
+
   return {
     layerId: layer.id,
-    estimatedWeightPerUnit: closest.averageWeight,
-    totalWeight: closest.averageWeight * quantity,
+    estimatedWeightPerUnit,
+    totalWeight: estimatedWeightPerUnit * quantity,
     confidence: sameType.length ? 'Medium' as ConfidenceLevel : 'Low' as ConfidenceLevel,
-    method: `Estimated from reference (product-size match): ${closest.referenceName}`,
+    method: `Estimated from "${closest.referenceName}" scaled to product size`,
     matchedReference: closest,
   };
 };

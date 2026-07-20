@@ -24,7 +24,7 @@ export default function PackagingLibraryPage() {
   const [view, setView] = useState<LibraryView>({ visible: [], hiddenDefaults: [], defaultIds: [] });
   const [form, setForm] = useState(emptyForm);
   const [addAsShared, setAddAsShared] = useState(false);
-  const [q, setQ] = useState(''); const [material, setMaterial] = useState(''); const [ptype, setPtype] = useState('');
+  const [q, setQ] = useState(''); const [material, setMaterial] = useState('');
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
@@ -41,10 +41,33 @@ export default function PackagingLibraryPage() {
   const filtered = useMemo(
     () => view.visible.filter((r) =>
       (!q || r.referenceName.toLowerCase().includes(q.toLowerCase())) &&
-      (!material || r.materialType === material) &&
-      (!ptype || r.packagingType === ptype)),
-    [view.visible, q, material, ptype],
+      (!material || r.materialType === material)),
+    [view.visible, q, material],
   );
+
+  const typeSections: { key: PackagingType; label: string }[] = [
+    { key: 'primary', label: 'Primary packaging' },
+    { key: 'secondary', label: 'Secondary packaging' },
+    { key: 'tertiary', label: 'Tertiary packaging' },
+  ];
+
+  const rowFor = (r: ReferenceItem) => {
+    const isDefault = defaultIdSet.has(r.id);
+    return (
+      <tr key={r.id} className="border-t">
+        <td className="p-2">{r.referenceName}</td>
+        <td className="text-center">{isDefault ? <span className="text-xs bg-slate-100 rounded px-2 py-0.5">Shared</span> : <span className="text-xs bg-emerald-100 text-emerald-800 rounded px-2 py-0.5">Mine</span>}</td>
+        <td className="text-center">{r.materialType}</td>
+        <td className="text-center">{r.length}×{r.width}×{r.height}</td>
+        <td className="text-center">{r.averageWeight}</td>
+        <td className="text-center">
+          <button className="text-red-600 hover:underline" onClick={() => removeItem(r)}>
+            {isDefault ? (isSuperadmin ? 'Delete' : 'Hide') : 'Delete'}
+          </button>
+        </td>
+      </tr>
+    );
+  };
 
   const submit = async () => {
     setError('');
@@ -106,34 +129,29 @@ export default function PackagingLibraryPage() {
       <div className="flex gap-2 flex-wrap">
         <input className="border rounded px-3 py-2" placeholder="Search reference" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="border rounded px-3 py-2" value={material} onChange={(e) => setMaterial(e.target.value)}><option value="">All materials</option>{[...new Set(view.visible.map((r) => r.materialType))].map((m) => <option key={m}>{m}</option>)}</select>
-        <select className="border rounded px-3 py-2" value={ptype} onChange={(e) => setPtype(e.target.value)}><option value="">All packaging types</option><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="tertiary">Tertiary</option></select>
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="bg-slate-50"><th className="p-2 text-left">Reference</th><th>Source</th><th>Material</th><th>Type</th><th>Dimensions (mm)</th><th>Avg weight (g)</th><th>Actions</th></tr></thead>
-          <tbody>
-            {filtered.map((r) => {
-              const isDefault = defaultIdSet.has(r.id);
-              return (
-                <tr key={r.id} className="border-t">
-                  <td className="p-2">{r.referenceName}</td>
-                  <td className="text-center">{isDefault ? <span className="text-xs bg-slate-100 rounded px-2 py-0.5">Shared</span> : <span className="text-xs bg-emerald-100 text-emerald-800 rounded px-2 py-0.5">Mine</span>}</td>
-                  <td className="text-center">{r.materialType}</td>
-                  <td className="text-center">{r.packagingType}</td>
-                  <td className="text-center">{r.length}×{r.width}×{r.height}</td>
-                  <td className="text-center">{r.averageWeight}</td>
-                  <td className="text-center">
-                    <button className="text-red-600 hover:underline" onClick={() => removeItem(r)}>
-                      {isDefault ? (isSuperadmin ? 'Delete' : 'Hide') : 'Delete'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {typeSections.map(({ key, label }) => {
+        const items = filtered.filter((r) => r.packagingType === key);
+        return (
+          <div key={key} className="bg-white rounded-xl shadow overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+              <h3 className="font-semibold text-slate-800">{label}</h3>
+              <span className="text-xs text-slate-500">{items.length} item{items.length === 1 ? '' : 's'}</span>
+            </div>
+            {items.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-slate-400">No {key} references{material || q ? ' match your filter' : ' yet'}.</p>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-slate-500"><th className="p-2 text-left">Reference</th><th>Source</th><th>Material</th><th>Dimensions (mm)</th><th>Avg weight (g)</th><th>Actions</th></tr></thead>
+                  <tbody>{items.map(rowFor)}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {view.hiddenDefaults.length > 0 && (
         <div className="bg-white rounded-xl shadow p-4 space-y-2">
