@@ -29,7 +29,7 @@ export default function VerifyEmailPage() {
         {notice && <p className="text-emerald-700 text-sm">{notice}</p>}
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button onClick={resend} className="w-full bg-emerald-600 text-white rounded-lg py-2">Resend confirmation email</button>
-        <button onClick={() => window.location.reload()} className="w-full border rounded-lg py-2">I've confirmed — reload</button>
+        <button onClick={() => window.location.reload()} className="w-full border rounded-lg py-2">I've confirmed, reload</button>
         <button onClick={() => void signOut()} className="text-sm text-slate-500 underline">Sign out</button>
         <p className="text-xs text-slate-400"><Link to="/privacy" className="underline">Privacy Policy</Link></p>
       </div>

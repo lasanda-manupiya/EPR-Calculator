@@ -19,6 +19,7 @@ export default function RegisterPage() {
   const [companyName, setCompanyName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [invitePreview, setInvitePreview] = useState<string>('');
+  const [inviteOk, setInviteOk] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,12 +30,19 @@ export default function RegisterPage() {
 
   const checkInvite = async (codeArg?: string) => {
     setInvitePreview('');
+    setInviteOk(false);
     const code = (codeArg ?? inviteCode).trim();
     if (!supabase || !code) return;
     const { data } = await supabase.rpc('preview_invite_code', { p_code: code });
     const row = Array.isArray(data) ? data[0] : data;
-    if (row?.valid) setInvitePreview(`✓ Valid — joins "${row.company_name}" as ${row.member_role}.`);
-    else setInvitePreview('✗ This invite code is invalid or expired.');
+    if (row?.valid && row?.is_full) {
+      setInvitePreview('This company has reached its 5 member limit. Ask the admin to remove a member first.');
+    } else if (row?.valid) {
+      setInvitePreview(`Valid. Joins "${row.company_name}" as ${row.member_role}.`);
+      setInviteOk(true);
+    } else {
+      setInvitePreview('This invite code is invalid or expired.');
+    }
   };
 
   // Pre-fill from an invite link, e.g. /register?invite=ABC12345
@@ -68,6 +76,19 @@ export default function RegisterPage() {
         if (available === false) {
           setSubmitting(false);
           return setError('That company name is already taken. If it is your company, ask an admin for an invite code.');
+        }
+      }
+      // Validate invite before signing up, so a full/invalid code fails clearly.
+      if (mode === 'join' && supabase) {
+        const { data } = await supabase.rpc('preview_invite_code', { p_code: inviteCode.trim() });
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row?.valid) {
+          setSubmitting(false);
+          return setError('This invite code is invalid or expired.');
+        }
+        if (row.is_full) {
+          setSubmitting(false);
+          return setError('This company has reached its 5 member limit. Ask the admin to remove a member first.');
         }
       }
       const { needsEmailConfirmation } = await signUp(email.trim(), password, {
@@ -115,7 +136,7 @@ export default function RegisterPage() {
         ) : (
           <div>
             <input required className="w-full border rounded-lg p-2" placeholder="Invite code" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} onBlur={() => checkInvite()} />
-            {invitePreview && <p className={`text-xs mt-1 ${invitePreview.startsWith('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{invitePreview}</p>}
+            {invitePreview && <p className={`text-xs mt-1 ${inviteOk ? 'text-emerald-700' : 'text-red-600'}`}>{invitePreview}</p>}
           </div>
         )}
 

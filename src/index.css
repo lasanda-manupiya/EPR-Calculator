@@ -6,3 +6,16 @@ body {
   @apply bg-mist text-slate-800;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-toast { animation: toastIn 0.28s ease-out; }
+
+@keyframes popCheck {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.animate-pop { display: inline-block; animation: popCheck 0.35s ease-out; }

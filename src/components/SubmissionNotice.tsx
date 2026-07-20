@@ -12,7 +12,7 @@ export default function SubmissionNotice({ confidence, count }: { confidence: Co
       <p className={`text-sm ${ready ? 'text-emerald-800' : 'text-amber-900'}`}>
         {ready
           ? 'These estimates meet the High confidence level recommended for EPR submission. '
-          : 'For EPR submission you need higher-confidence figures — some of these estimates are currently below High confidence. '}
+          : 'For EPR submission you need higher confidence figures. Some of these estimates are currently below High confidence. '}
         For verified, submission-ready packaging data, please contact us at{' '}
         <a href="mailto:connect@sustainzone.earth" className="font-semibold underline">connect@sustainzone.earth</a>.
       </p>

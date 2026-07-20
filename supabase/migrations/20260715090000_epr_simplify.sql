@@ -253,13 +253,14 @@ begin
         and (expires_at is null or expires_at > now())
         and (max_uses is null or used_count < max_uses)
       for update;
-    if found then
+    -- Enforce the 5-member cap; a full company simply doesn't add the user.
+    if found and (select count(*) from public.company_members where company_id = inv.company_id) < 5 then
       insert into public.company_members (company_id, user_id, full_name, role)
       values (inv.company_id, new.id, v_full_name, inv.role)
       on conflict (user_id) do nothing;
       update public.invite_codes set used_count = used_count + 1 where id = inv.id;
     end if;
-    -- Invalid/expired codes leave the user without a company; the app guides them.
+    -- Invalid/expired/full codes leave the user without a company; the app guides them.
     return new;
   end if;
 
@@ -295,15 +296,17 @@ returns boolean language sql stable security definer set search_path = public as
   );
 $$;
 
+drop function if exists public.preview_invite_code(text);
 create or replace function public.preview_invite_code(p_code text)
-returns table(valid boolean, company_name text, member_role text)
+returns table(valid boolean, company_name text, member_role text, is_full boolean)
 language sql stable security definer set search_path = public as $$
   select
     (ic.active
       and (ic.expires_at is null or ic.expires_at > now())
       and (ic.max_uses is null or ic.used_count < ic.max_uses)) as valid,
     c.name as company_name,
-    ic.role as member_role
+    ic.role as member_role,
+    ((select count(*) from public.company_members m where m.company_id = ic.company_id) >= 5) as is_full
   from public.invite_codes ic
   join public.companies c on c.id = ic.company_id
   where ic.code = trim(p_code)
@@ -333,6 +336,12 @@ begin
   if p_role not in ('admin','member') then raise exception 'Invalid role.'; end if;
   if p_role = 'admin' and not public.is_superadmin() then
     raise exception 'Only the superadmin can invite admins.';
+  end if;
+  if (select count(*) from public.company_members where company_id = v_company) >= 5 then
+    raise exception 'Your company has reached its 5 member limit.';
+  end if;
+  if exists (select 1 from public.invite_codes where company_id = v_company and created_at >= date_trunc('day', now())) then
+    raise exception 'You can only create one invite per day. Please try again tomorrow.';
   end if;
   -- gen_random_uuid() is built-in (pg_catalog); avoids pgcrypto/search_path issues.
   v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));

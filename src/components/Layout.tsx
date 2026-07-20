@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { isSupabaseConfigured, missingSupabaseConfig } from '@/lib/supabase';
 
 interface NavItem { label: string; path: string; show: boolean; }
 
@@ -27,13 +26,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         <h1 className="text-2xl font-bold mb-1">SustainZone EPR</h1>
         <p className="text-xs text-slate-300">{user?.email}</p>
         <p className="text-xs text-slate-400 mb-4">
-          {activeCompanyName ? <>{activeCompanyName} · <span className="capitalize">{role}</span></> : 'No company'}
+          {activeCompanyName ? <>{activeCompanyName} (<span className="capitalize">{role}</span>)</> : 'No company'}
         </p>
 
         {authIssue && <p className="text-xs mb-4 rounded px-2 py-1 bg-amber-500/20 text-amber-200">{authIssue}</p>}
-        <p className={`text-xs mb-4 rounded px-2 py-1 ${isSupabaseConfigured ? 'bg-emerald-600/30 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>
-          {isSupabaseConfigured ? 'Cloud mode: Supabase connected' : `Local mode: missing ${missingSupabaseConfig.url ? 'VITE_SUPABASE_URL' : ''}${missingSupabaseConfig.url && missingSupabaseConfig.anonKey ? ' + ' : ''}${missingSupabaseConfig.anonKey ? 'VITE_SUPABASE_ANON_KEY' : ''}`}
-        </p>
 
         <nav className="space-y-2">
           {items.filter((i) => i.show).map((item) => {

@@ -1,9 +1,9 @@
 import { Dimensions, Product } from '@/types';
 
 const formatDimensions = (d?: Dimensions): string => {
-  if (!d) return '—';
+  if (!d) return 'N/A';
   const { length, width, height, unit } = d;
-  if (!length && !width && !height) return '—';
+  if (!length && !width && !height) return 'N/A';
   return `${length ?? 0} × ${width ?? 0} × ${height ?? 0} ${unit ?? 'mm'}`;
 };
 

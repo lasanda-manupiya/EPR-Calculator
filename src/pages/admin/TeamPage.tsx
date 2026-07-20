@@ -20,7 +20,7 @@ export default function TeamPage() {
       setCopied(code);
       setTimeout(() => setCopied(''), 1500);
     } catch {
-      setError('Could not copy to clipboard — copy the link manually.');
+      setError('Could not copy to clipboard. Please copy the link manually.');
     }
   };
 
@@ -91,6 +91,7 @@ export default function TeamPage() {
       <div className="bg-white rounded-xl shadow p-5 space-y-3">
         <h3 className="font-semibold">Invite a teammate</h3>
         <p className="text-sm text-slate-500">Generate a code and share it. They enter it on the registration screen to join your company.</p>
+        <p className="text-sm text-slate-600">Your company has <span className="font-medium">{members.length} of 5</span> members. You can create one invite per day.</p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">Role
             <select className="border rounded px-3 py-2 block mt-1" value={newRole} onChange={(e) => setNewRole(e.target.value as 'admin' | 'member')}>
@@ -101,12 +102,12 @@ export default function TeamPage() {
           <label className="text-sm">Max uses (blank = unlimited)
             <input className="border rounded px-3 py-2 block mt-1 w-40" type="number" min="1" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
           </label>
-          <button className="px-3 py-2 bg-emerald-600 text-white rounded" onClick={generateCode}>Generate code</button>
+          <button disabled={members.length >= 5} className="px-3 py-2 bg-emerald-600 text-white rounded disabled:opacity-50" onClick={generateCode}>Generate code</button>
         </div>
         {lastCode && (
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
             <p className="text-sm">Code: <span className="font-mono font-bold text-lg">{lastCode}</span></p>
-            <p className="text-xs text-slate-600">Share this link — the invitee just sets a password and joins your company:</p>
+            <p className="text-xs text-slate-600">Share this link. The invitee just sets a password and joins your company:</p>
             <div className="flex items-center gap-2">
               <input readOnly value={inviteLink(lastCode)} className="flex-1 border rounded px-2 py-1 text-sm bg-white" onFocus={(e) => e.target.select()} />
               <button type="button" className="px-3 py-1 bg-emerald-600 text-white rounded text-sm" onClick={() => copyLink(lastCode)}>{copied === lastCode ? 'Copied!' : 'Copy link'}</button>
@@ -122,13 +123,13 @@ export default function TeamPage() {
           <tbody>
             {members.map((m) => (
               <tr key={m.id} className="border-t">
-                <td className="p-2">{m.email ?? '—'}</td>
-                <td className="text-center">{m.fullName ?? '—'}</td>
+                <td className="p-2">{m.email ?? 'N/A'}</td>
+                <td className="text-center">{m.fullName ?? 'N/A'}</td>
                 <td className="text-center capitalize">{m.role}</td>
                 <td className="text-center">
                   {m.role !== 'superadmin' && m.userId !== user?.id
                     ? <button className="text-red-600 hover:underline" onClick={() => removeMember(m)}>Remove</button>
-                    : <span className="text-slate-300">—</span>}
+                    : null}
                 </td>
               </tr>
             ))}

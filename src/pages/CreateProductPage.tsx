@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { loadVisibleReferenceItems } from '@/utils/cloudStorage';
 import { estimateProduct } from '@/utils/calculations';
 import { MaterialType, PackagingLayer, PackagingType, Product, ReferenceItem } from '@/types';
@@ -35,6 +36,7 @@ const parseCsvRows = (text: string): string[][] => text.trim().split(/\r?\n/).fi
 
 export default function CreateProductPage({ onSave }: { onSave: (p: Product) => void | Promise<void> }) {
   const { activeCompanyId, user } = useAuth();
+  const nav = useNavigate();
   const [step, setStep] = useState(0);
   const [name, setName] = useState(''); const [category, setCategory] = useState(''); const [sku, setSku] = useState(''); const [quantity, setQuantity] = useState(1);
   const [dimensions, setDimensions] = useState({ length: 0, width: 0, height: 0, unit: 'mm' as const });
@@ -42,6 +44,8 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
   const [layers, setLayers] = useState<PackagingLayer[]>([newLayer(1)]);
   const [extractedRows, setExtractedRows] = useState<ExtractedRow[]>([]);
   const [importMessage, setImportMessage] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
 
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceItem[]>([]);
   useEffect(() => { loadVisibleReferenceItems(user?.id).then(setReferenceLibrary).catch(() => setReferenceLibrary([])); }, [user?.id]);
@@ -153,7 +157,18 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
     };
   });
 
-  const save = () => onSave({ id: crypto.randomUUID(), name, category, sku, quantity, dimensions, layers: layeredForSave, estimation: est, createdAt: new Date().toISOString() });
+  const save = async () => {
+    setSaveError('');
+    setSaveStatus('saving');
+    try {
+      await onSave({ id: crypto.randomUUID(), name, category, sku, quantity, dimensions, layers: layeredForSave, estimation: est, createdAt: new Date().toISOString() });
+      setSaveStatus('saved');
+      setTimeout(() => nav('/products'), 1100);
+    } catch (err) {
+      setSaveStatus('error');
+      setSaveError((err as Error).message);
+    }
+  };
 
   return <div className="space-y-5"><h2 className="text-2xl font-semibold">Create Product</h2>
     <div className="grid md:grid-cols-5 gap-2">{steps.map((s, i) => <div key={s} className={`px-3 py-2 rounded text-xs font-medium ${i === step ? 'bg-eco text-white' : 'bg-white'}`}>{i + 1}. {s}</div>)}</div>
@@ -167,8 +182,16 @@ export default function CreateProductPage({ onSave }: { onSave: (p: Product) => 
       {step === 2 && <div><h3 className="font-semibold mb-3">Packaging Layers</h3><div className="flex gap-2 items-center"><label>How many packaging layers does this item use?</label><input className="border p-2 rounded w-24" type="number" min={1} value={layerCount} onChange={e => updateLayerCount(Number(e.target.value))} /><button className="px-3 py-2 border rounded" onClick={() => updateLayerCount(layerCount + 1)}>Add layer</button></div>
       <div className="space-y-3 mt-4">{layers.map((l, idx) => { const e = est.layerEstimates.find((x) => x.layerId === l.id); return <div key={l.id} className="p-3 border rounded-lg space-y-2"><p className="font-medium">Layer {idx + 1}</p><div className="grid md:grid-cols-3 gap-2"><input className="border p-2 rounded" placeholder="Layer name" value={l.layerName} onChange={ev => updateLayer(idx, { layerName: ev.target.value })} /><select className="border p-2 rounded" value={l.packagingType} onChange={ev => updateLayer(idx, { packagingType: ev.target.value as PackagingType })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="tertiary">Tertiary</option></select><select className="border p-2 rounded" value={l.materialType} onChange={ev => updateLayer(idx, { materialType: ev.target.value as MaterialType })}>{materials.map(m => <option key={m}>{m}</option>)}</select><input className="border p-2 rounded" type="number" placeholder="Known packaging weight (g), optional" value={l.knownWeight ?? ''} onChange={ev => updateLayer(idx, { knownWeight: ev.target.value ? Number(ev.target.value) : undefined })} /></div><p className="text-xs text-slate-600">Matched reference preview: {e?.matchedReference?.referenceName ?? 'Pending'}</p><p className="text-xs text-slate-600">Estimated weight preview: {(e?.estimatedWeightPerUnit ?? 0).toFixed(2)} g</p><button className="text-red-600 text-sm" onClick={() => removeLayer(l.id)}>Remove layer</button></div>; })}</div></div>}
       {step === 3 && <div><h3 className="font-semibold mb-3">Reference Match</h3>{layers.map((l) => { const e = est.layerEstimates.find((x) => x.layerId === l.id); return <div key={l.id} className="border rounded p-3 mb-2 text-sm"><p className="font-medium">{l.layerName}</p><p>Matched reference item: {e?.matchedReference?.referenceName ?? 'None'}</p><p>Estimated weight per layer: {(e?.estimatedWeightPerUnit ?? 0).toFixed(2)} g</p><p>Confidence level: {e?.confidence ?? 'Low'}</p><p>Estimation method: {e?.method ?? 'No estimate'}</p>{e?.warning && <p className="text-amber-700">⚠ {e.warning}</p>}</div>; })}</div>}
-      {step === 4 && <div><h3 className="font-semibold mb-3">Review Estimate</h3><p>Item: {name || '—'} | Category: {category || '—'} | SKU: {sku || '—'} | Quantity: {quantity}</p><p>Item dimensions: {dimensions.length} x {dimensions.width} x {dimensions.height} {dimensions.unit}</p><p>Total packaging weight per unit: {est.estimatedWeightPerUnit.toFixed(2)} g</p><p>Total packaging weight for quantity placed on market: {est.totalPackagingWeight.toFixed(2)} g</p><p>Material breakdown: {Object.entries(est.materialBreakdown).map(([k, v]) => `${k} ${v.toFixed(2)}g`).join(', ') || 'N/A'}</p><p>Packaging type breakdown: {Object.entries(est.packagingTypeBreakdown).map(([k, v]) => `${k} ${v.toFixed(2)}g`).join(', ') || 'N/A'}</p>{est.warnings.map(w => <p key={w} className="text-amber-700">⚠ {w}</p>)}</div>}
+      {step === 4 && <div><h3 className="font-semibold mb-3">Review Estimate</h3><p>Item: {name || 'N/A'} | Category: {category || 'N/A'} | SKU: {sku || 'N/A'} | Quantity: {quantity}</p><p>Item dimensions: {dimensions.length} x {dimensions.width} x {dimensions.height} {dimensions.unit}</p><p>Total packaging weight per unit: {est.estimatedWeightPerUnit.toFixed(2)} g</p><p>Total packaging weight for quantity placed on market: {est.totalPackagingWeight.toFixed(2)} g</p><p>Material breakdown: {Object.entries(est.materialBreakdown).map(([k, v]) => `${k} ${v.toFixed(2)}g`).join(', ') || 'N/A'}</p><p>Packaging type breakdown: {Object.entries(est.packagingTypeBreakdown).map(([k, v]) => `${k} ${v.toFixed(2)}g`).join(', ') || 'N/A'}</p>{est.warnings.map(w => <p key={w} className="text-amber-700">⚠ {w}</p>)}</div>}
       <div className="border-t pt-3 text-sm"><p className="font-semibold">Live estimation: {est.totalPackagingWeight.toFixed(2)} g total ({est.overallConfidence} confidence)</p></div>
-      <div className="flex gap-2"><button disabled={step === 0} onClick={() => setStep(step - 1)} className="px-3 py-2 border rounded">Back</button>{step < 4 ? <button onClick={() => setStep(step + 1)} className="px-3 py-2 bg-eco text-white rounded">Next</button> : <button disabled={!activeCompanyId} onClick={save} className="px-3 py-2 bg-navy text-white rounded disabled:opacity-50">Save product</button>}</div>
-    </div></div>;
+      <div className="flex gap-2 items-center"><button disabled={step === 0} onClick={() => setStep(step - 1)} className="px-3 py-2 border rounded">Back</button>{step < 4 ? <button onClick={() => setStep(step + 1)} className="px-3 py-2 bg-eco text-white rounded">Next</button> : <button disabled={!activeCompanyId || saveStatus === 'saving' || saveStatus === 'saved'} onClick={save} className="px-3 py-2 bg-navy text-white rounded disabled:opacity-50">{saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save product'}</button>}
+      {saveStatus === 'saved' && <span className="text-emerald-700 text-sm font-medium"><span className="animate-pop">✓</span> Product saved</span>}
+      {saveStatus === 'error' && <span className="text-red-600 text-sm">Could not save: {saveError}</span>}</div>
+    </div>
+    {saveStatus === 'saved' && (
+      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg animate-toast">
+        <span className="animate-pop text-lg">✓</span> Product saved successfully
+      </div>
+    )}
+    </div>;
 }

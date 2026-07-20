@@ -5,7 +5,7 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow p-8 space-y-4 text-sm text-slate-700">
         <h1 className="text-2xl font-semibold">Privacy Policy &amp; Data Notice</h1>
-        <p className="text-slate-500">SustainZone EPR — packaging estimation. Last updated: 15 July 2026.</p>
+        <p className="text-slate-500">SustainZone EPR packaging estimation. Last updated: 15 July 2026.</p>
 
         <section className="space-y-1">
           <h2 className="font-semibold text-slate-900">Who is the data controller</h2>
@@ -15,8 +15,8 @@ export default function PrivacyPage() {
         <section className="space-y-1">
           <h2 className="font-semibold text-slate-900">What we collect and why</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Account data</strong> (name, email, company name) — to create and secure your account and link you to your company. Legal basis: contract.</li>
-            <li><strong>Product &amp; packaging data</strong> you enter — to produce EPR estimates. Legal basis: contract / legitimate interest.</li>
+            <li><strong>Account data</strong> (name, email, company name): to create and secure your account and link you to your company. Legal basis: contract.</li>
+            <li><strong>Product &amp; packaging data</strong> you enter: to produce EPR estimates. Legal basis: contract / legitimate interest.</li>
             <li><strong>Authentication metadata</strong> (login timestamps, email confirmation) handled by our processor, Supabase. Legal basis: legitimate interest (security).</li>
           </ul>
         </section>
