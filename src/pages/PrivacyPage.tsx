@@ -32,6 +32,11 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-1">
+          <h2 className="font-semibold text-slate-900">Cookies &amp; browser storage</h2>
+          <p>We use only <strong>essential</strong> browser storage (local/session storage) to keep you signed in and to run the application. If you choose "Keep me signed in for 30 days" your session is stored until it expires or you sign out; otherwise it is cleared when you close your browser. We do not use tracking, analytics, or advertising cookies.</p>
+        </section>
+
+        <section className="space-y-1">
           <h2 className="font-semibold text-slate-900">Your rights (GDPR)</h2>
           <p>You may access, rectify, export, or erase your personal data. From <strong>Settings → Your data (GDPR)</strong> you can download a copy of your data or delete it. Deleting your data removes your library items and company membership; if you are the last member of your company, the company and its records are deleted. To fully remove your login credentials, contact us at the address above.</p>
         </section>
