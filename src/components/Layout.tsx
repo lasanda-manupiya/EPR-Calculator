@@ -24,11 +24,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex bg-slate-100">
       <aside className="fixed left-0 top-0 h-full w-72 bg-slate-950 text-white p-6 shadow-2xl overflow-y-auto">
-        <div className="mb-4 rounded-xl bg-white p-3 flex items-center justify-center">
+        <div className="mb-4 rounded-xl bg-white px-4 py-3 flex items-center justify-center">
           <BrandLogo
             src="/epr-calculator-logo.png"
             alt="EPR Calculator by SustainZone"
-            className="h-16 w-auto"
+            className="w-full h-auto"
             fallback={<div className="flex items-center gap-2"><LeafMark className="h-9 w-9" /><span className="text-slate-900 font-bold">EPR Calculator</span></div>}
           />
         </div>

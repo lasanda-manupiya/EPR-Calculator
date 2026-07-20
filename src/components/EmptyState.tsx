@@ -16,8 +16,7 @@ export default function EmptyState({ title, message, action }: { title: string; 
           fallback={<LeafMark className="w-56 h-56" />}
         />
       </div>
-      <div className="relative z-10 px-8 py-16 text-center">
-        <div className="mx-auto mb-4 w-12 h-12"><LeafMark className="w-full h-full opacity-90" /></div>
+      <div className="relative z-10 px-8 py-20 text-center">
         <h3 className="text-lg font-semibold text-slate-700">{title}</h3>
         <p className="mt-1 text-sm text-slate-500 max-w-md mx-auto">{message}</p>
         {action && <div className="mt-4">{action}</div>}

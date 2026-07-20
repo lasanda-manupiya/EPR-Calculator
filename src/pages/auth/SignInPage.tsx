@@ -53,7 +53,7 @@ export default function SignInPage() {
           <BrandLogo
             src="/epr-calculator-logo.png"
             alt="EPR Calculator by SustainZone"
-            className="h-20 w-auto"
+            className="w-56 h-auto"
             fallback={<div className="flex items-center gap-2"><LeafMark className="h-10 w-10" /><span className="text-lg font-bold text-slate-800">EPR Calculator</span></div>}
           />
         </div>
