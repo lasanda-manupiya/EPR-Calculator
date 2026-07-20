@@ -1,5 +1,6 @@
 import { ConfidenceLevel, Product } from '@/types';
 import SubmissionNotice from '@/components/SubmissionNotice';
+import EmptyState from '@/components/EmptyState';
 
 export default function ReportsPage({ products }: { products: Product[] }) {
   const materialTotals: Record<string, number> = {};
@@ -28,6 +29,12 @@ export default function ReportsPage({ products }: { products: Product[] }) {
     const blob = new Blob([rows.map((r) => r.join(',')).join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sustainzone-epr-layer-report.csv'; a.click(); URL.revokeObjectURL(a.href);
   };
+
+  if (products.length === 0) {
+    return <div className="space-y-5"><h2 className="text-2xl font-semibold">Reports</h2>
+      <EmptyState title="No report data yet" message="Create products to generate an EPR report with weight by material, packaging type, and CSV export." />
+    </div>;
+  }
 
   return <div className="space-y-5"><h2 className="text-2xl font-semibold">Reports</h2>
     <SubmissionNotice confidence={products.length ? avgConfidence : null} count={products.length} />

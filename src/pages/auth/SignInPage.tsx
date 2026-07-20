@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { BrandLogo, LeafMark } from '@/components/BrandLogo';
 
 export default function SignInPage() {
   const { signIn, resendVerification } = useAuth();
@@ -48,6 +49,14 @@ export default function SignInPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-emerald-50 p-6">
       <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-4">
+        <div className="flex justify-center mb-2">
+          <BrandLogo
+            src="/epr-calculator-logo.png"
+            alt="EPR Calculator by SustainZone"
+            className="h-20 w-auto"
+            fallback={<div className="flex items-center gap-2"><LeafMark className="h-10 w-10" /><span className="text-lg font-bold text-slate-800">EPR Calculator</span></div>}
+          />
+        </div>
         <h1 className="text-2xl font-bold">Sign in</h1>
         <p className="text-sm text-slate-500">Sign in to your SustainZone EPR account.</p>
         {error && <p className="text-red-600 text-sm">{error}</p>}

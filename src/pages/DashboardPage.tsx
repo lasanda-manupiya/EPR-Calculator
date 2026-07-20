@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { ConfidenceLevel, Product } from '@/types';
 import SubmissionNotice from '@/components/SubmissionNotice';
+import EmptyState from '@/components/EmptyState';
 
 const PALETTE = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#14b8a6', '#eab308', '#64748b'];
 const MATERIAL_COLORS: Record<string, string> = {
@@ -100,9 +101,10 @@ export default function DashboardPage({ products }: { products: Product[] }) {
       <SubmissionNotice confidence={products.length ? stats.avgConfidence : null} count={products.length} />
 
       {products.length === 0 ? (
-        <div className="bg-white rounded-xl p-10 shadow text-center text-slate-400">
-          No products yet. Create products to populate your packaging charts.
-        </div>
+        <EmptyState
+          title="No products yet"
+          message="Create your first product to populate your EPR dashboard with packaging weight, material breakdown, and confidence charts."
+        />
       ) : (
         <div className="grid lg:grid-cols-2 gap-4">
           <ChartCard title="Packaging weight by material" subtitle="Drives your EPR fees" hasData={stats.materialData.length > 0}>
