@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { Role } from '@/types';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, supabaseAuthCheck } from '@/lib/supabase';
 
 interface SignUpMeta {
   fullName: string;
@@ -141,10 +141,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // 2) drop that session so no access is granted yet,
   // 3) email a one-time code. A session is only created after verifyLoginOtp.
   const passwordThenSendOtp = async (email: string, password: string) => {
-    if (!supabase) throw new Error('Supabase auth is not configured.');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!supabase || !supabaseAuthCheck) throw new Error('Supabase auth is not configured.');
+    // Verify the password on the throwaway client so the main app's session
+    // (and UI) never changes until the emailed code is verified.
+    const { error } = await supabaseAuthCheck.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    await supabase.auth.signOut();
+    await supabaseAuthCheck.auth.signOut();
     const { error: otpErr } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
     if (otpErr) throw otpErr;
   };

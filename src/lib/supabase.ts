@@ -50,6 +50,21 @@ export const supabase = isSupabaseConfigured
         autoRefreshToken: true,
         detectSessionInUrl: true,
         storage: rememberAwareStorage,
+        storageKey: 'epr-auth',
+      },
+    })
+  : null;
+
+// Throwaway client used only to verify a password during login 2FA. It never
+// persists a session, so verifying the password does not sign the user into the
+// main app (which would otherwise flash the dashboard and cancel the OTP step).
+export const supabaseAuthCheck = isSupabaseConfigured
+  ? createClient(url!, anonKey!, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'epr-authcheck',
       },
     })
   : null;
