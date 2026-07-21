@@ -6,6 +6,7 @@ import {
 import { ConfidenceLevel, Product } from '@/types';
 import SubmissionNotice from '@/components/SubmissionNotice';
 import EmptyState from '@/components/EmptyState';
+import { formatKg, toKg } from '@/utils/format';
 
 const PALETTE = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#14b8a6', '#eab308', '#64748b'];
 const MATERIAL_COLORS: Record<string, string> = {
@@ -15,8 +16,9 @@ const MATERIAL_COLORS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = { primary: '#10b981', secondary: '#3b82f6', tertiary: '#f59e0b' };
 const CONFIDENCE_COLORS: Record<string, string> = { High: '#10b981', Medium: '#f59e0b', Low: '#ef4444' };
 
-const fmtWeight = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(2)} kg` : `${n.toFixed(1)} g`);
-const tooltipWeight = (v: unknown) => fmtWeight(Number(v));
+// Chart values are already converted to kilograms, so these only add the unit.
+const fmtKgValue = (n: number) => `${n.toFixed(3)} kg`;
+const tooltipWeight = (v: unknown) => fmtKgValue(Number(v));
 
 function ChartCard({ title, subtitle, hasData, children }: { title: string; subtitle?: string; hasData: boolean; children: ReactNode }) {
   return (
@@ -42,12 +44,12 @@ export default function DashboardPage({ products }: { products: Product[] }) {
     const materialTotals = sumInto((p) => p.estimation.materialBreakdown);
     const typeTotals = sumInto((p) => p.estimation.packagingTypeBreakdown);
 
-    const materialData = Object.entries(materialTotals).map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
+    const materialData = Object.entries(materialTotals).map(([name, value]) => ({ name, value: toKg(value) }));
     const typeData = Object.entries(typeTotals)
-      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), key: name, value: Number(value.toFixed(1)) }));
+      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), key: name, value: toKg(value) }));
 
     const topProducts = [...products]
-      .map((p) => ({ name: p.name || p.sku || 'Unnamed', weight: Number(p.estimation.totalPackagingWeight.toFixed(1)) }))
+      .map((p) => ({ name: p.name || p.sku || 'Unnamed', weight: toKg(p.estimation.totalPackagingWeight) }))
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 8);
 
@@ -59,7 +61,7 @@ export default function DashboardPage({ products }: { products: Product[] }) {
 
     const categoryTotals: Record<string, number> = {};
     products.forEach((p) => { const c = p.category || 'Uncategorised'; categoryTotals[c] = (categoryTotals[c] || 0) + p.estimation.totalPackagingWeight; });
-    const categoryData = Object.entries(categoryTotals).map(([name, value]) => ({ name, weight: Number(value.toFixed(1)) }));
+    const categoryData = Object.entries(categoryTotals).map(([name, value]) => ({ name, weight: toKg(value) }));
 
     const byDay = new Map<string, number>();
     [...products].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')).forEach((p) => {
@@ -67,7 +69,7 @@ export default function DashboardPage({ products }: { products: Product[] }) {
       byDay.set(day, (byDay.get(day) || 0) + p.estimation.totalPackagingWeight);
     });
     let cum = 0;
-    const overTime = [...byDay.entries()].map(([day, w]) => { cum += w; return { day, cumulative: Number(cum.toFixed(1)) }; });
+    const overTime = [...byDay.entries()].map(([day, w]) => { cum += w; return { day, cumulative: toKg(cum) }; });
 
     const confScore = { High: 3, Medium: 2, Low: 1 } as const;
     const avgScore = allLayers.length ? allLayers.reduce((s, l) => s + confScore[l.confidenceLevel ?? 'Low'], 0) / allLayers.length : 0;
@@ -79,7 +81,7 @@ export default function DashboardPage({ products }: { products: Product[] }) {
 
   const kpis: [string, string][] = [
     ['Items assessed', String(products.length)],
-    ['Total packaging weight', fmtWeight(stats.total)],
+    ['Total packaging weight', formatKg(stats.total)],
     ['Total packaging layers', String(stats.allLayers.length)],
     ['Most used material', stats.mostUsedMaterial],
     ['Average confidence', products.length ? stats.avgConfidence : 'N/A'],
@@ -134,7 +136,7 @@ export default function DashboardPage({ products }: { products: Product[] }) {
           <ChartCard title="Top products by packaging weight" subtitle="Biggest contributors" hasData={stats.topProducts.length > 0}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={stats.topProducts} layout="vertical" margin={{ left: 20, right: 20 }}>
-                <XAxis type="number" tickFormatter={(v) => fmtWeight(Number(v))} fontSize={11} />
+                <XAxis type="number" tickFormatter={(v) => fmtKgValue(Number(v))} fontSize={11} />
                 <YAxis type="category" dataKey="name" width={110} fontSize={11} />
                 <Tooltip formatter={tooltipWeight} />
                 <Bar dataKey="weight" fill="#10b981" radius={[0, 4, 4, 0]} />
@@ -158,7 +160,7 @@ export default function DashboardPage({ products }: { products: Product[] }) {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={stats.categoryData} margin={{ left: 10, right: 10 }}>
                 <XAxis dataKey="name" fontSize={11} />
-                <YAxis tickFormatter={(v) => fmtWeight(Number(v))} fontSize={11} width={60} />
+                <YAxis tickFormatter={(v) => fmtKgValue(Number(v))} fontSize={11} width={60} />
                 <Tooltip formatter={tooltipWeight} />
                 <Bar dataKey="weight" radius={[4, 4, 0, 0]}>
                   {stats.categoryData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -171,7 +173,7 @@ export default function DashboardPage({ products }: { products: Product[] }) {
             <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={stats.overTime} margin={{ left: 10, right: 10 }}>
                 <XAxis dataKey="day" fontSize={11} />
-                <YAxis tickFormatter={(v) => fmtWeight(Number(v))} fontSize={11} width={60} />
+                <YAxis tickFormatter={(v) => fmtKgValue(Number(v))} fontSize={11} width={60} />
                 <Tooltip formatter={tooltipWeight} />
                 <Area type="monotone" dataKey="cumulative" stroke="#10b981" fill="#10b98133" />
               </AreaChart>

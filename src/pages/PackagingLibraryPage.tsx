@@ -12,6 +12,7 @@ import {
   restoreDefaultItem,
 } from '@/utils/cloudStorage';
 import { useAuth } from '@/context/AuthContext';
+import { kgValue } from '@/utils/format';
 
 const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
   referenceName: '', materialType: 'Cardboard', packagingType: 'primary', length: 0, width: 0, height: 0, unit: 'mm', averageWeight: 0, notes: '',
@@ -59,8 +60,8 @@ export default function PackagingLibraryPage() {
         <td className="p-2">{r.referenceName}</td>
         <td className="text-center">{isDefault ? <span className="text-xs bg-slate-100 rounded px-2 py-0.5">Shared</span> : <span className="text-xs bg-emerald-100 text-emerald-800 rounded px-2 py-0.5">Mine</span>}</td>
         <td className="text-center">{r.materialType}</td>
-        <td className="text-center">{r.length}×{r.width}×{r.height}</td>
-        <td className="text-center">{r.averageWeight}</td>
+        <td className="text-center whitespace-nowrap">{r.length}×{r.width}×{r.height} {r.unit}</td>
+        <td className="text-center">{kgValue(r.averageWeight)}</td>
         <td className="text-center">
           <button className="text-red-600 hover:underline" onClick={() => removeItem(r)}>
             {isDefault ? (isSuperadmin ? 'Delete' : 'Hide') : 'Delete'}
@@ -113,8 +114,8 @@ export default function PackagingLibraryPage() {
           <select className="border rounded px-3 py-2" value={form.materialType} onChange={(e) => setForm({ ...form, materialType: e.target.value as MaterialType })}>{materials.map((m) => <option key={m}>{m}</option>)}</select>
           <select className="border rounded px-3 py-2" value={form.packagingType} onChange={(e) => setForm({ ...form, packagingType: e.target.value as PackagingType })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="tertiary">Tertiary</option></select>
           <div className="relative">
-            <input className="border rounded px-3 py-2 w-full pr-8" type="number" placeholder="Avg weight e.g. 45" value={form.averageWeight || ''} onChange={(e) => setForm({ ...form, averageWeight: Number(e.target.value) || 0 })} />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">g</span>
+            <input className="border rounded px-3 py-2 w-full pr-10" type="number" step="0.001" placeholder="Avg weight e.g. 0.045" value={form.averageWeight ? form.averageWeight / 1000 : ''} onChange={(e) => setForm({ ...form, averageWeight: Math.round((Number(e.target.value) || 0) * 1000) })} />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">kg</span>
           </div>
           {(['length', 'width', 'height'] as const).map((k) => (
             <div key={k} className="relative">
@@ -158,7 +159,7 @@ export default function PackagingLibraryPage() {
             ) : (
               <div className="overflow-auto">
                 <table className="w-full text-sm">
-                  <thead><tr className="text-slate-500"><th className="p-2 text-left">Reference</th><th>Source</th><th>Material</th><th>Dimensions (mm)</th><th>Avg weight (g)</th><th>Actions</th></tr></thead>
+                  <thead><tr className="text-slate-500"><th className="p-2 text-left">Reference</th><th>Source</th><th>Material</th><th>Dimensions</th><th>Avg weight (kg)</th><th>Actions</th></tr></thead>
                   <tbody>{items.map(rowFor)}</tbody>
                 </table>
               </div>

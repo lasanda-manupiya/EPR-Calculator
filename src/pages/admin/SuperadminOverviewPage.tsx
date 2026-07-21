@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Product } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { formatKg, kgValue } from '@/utils/format';
 
 interface CompanyRow { id: string; name: string; }
 interface ProductRow { company_id: string; payload: Product; }
@@ -68,19 +69,19 @@ export default function SuperadminOverviewPage() {
           <div key={r.id} className="bg-white rounded-xl shadow">
             <button className="w-full flex items-center justify-between p-4 text-left" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
               <span className="font-medium">{r.name}</span>
-              <span className="text-sm text-slate-500">{r.memberCount} member(s) · {r.products.length} product(s) · {Math.round(r.totalWeight)} g total</span>
+              <span className="text-sm text-slate-500">{r.memberCount} member(s) · {r.products.length} product(s) · {formatKg(r.totalWeight)} total</span>
             </button>
             {expanded === r.id && (
               <div className="border-t overflow-auto">
                 <table className="w-full text-sm">
-                  <thead><tr className="bg-slate-50"><th className="p-2 text-left">Product</th><th>SKU</th><th>Qty</th><th>Packaging weight (g)</th></tr></thead>
+                  <thead><tr className="bg-slate-50"><th className="p-2 text-left">Product</th><th>SKU</th><th>Qty</th><th>Packaging weight (kg)</th></tr></thead>
                   <tbody>
                     {r.products.map((p) => (
                       <tr key={p.id} className="border-t">
                         <td className="p-2">{p.name}</td>
                         <td className="text-center">{p.sku}</td>
                         <td className="text-center">{p.quantity}</td>
-                        <td className="text-center">{Math.round(p.estimation?.totalPackagingWeight ?? 0)}</td>
+                        <td className="text-center">{kgValue(p.estimation?.totalPackagingWeight ?? 0)}</td>
                       </tr>
                     ))}
                     {r.products.length === 0 && <tr><td colSpan={4} className="p-3 text-center text-slate-400">No products yet.</td></tr>}

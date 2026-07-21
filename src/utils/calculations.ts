@@ -2,7 +2,16 @@ import { EstimationResult, PackagingLayer, Product, ReferenceItem, Unit, Confide
 
 const unitFactor: Record<Unit, number> = { mm: 1, cm: 10, m: 1000 };
 const toMM = (v: number | undefined, u: Unit) => (v ? v * unitFactor[u] : 0);
-const volume = (l?: number, w?: number, h?: number, u: Unit = 'mm') => toMM(l, u) * toMM(w, u) * toMM(h, u);
+
+// Dimensions normalised to mm and sorted largest first, so a 120x80x45 product
+// matches an 80x120x45 reference. Orientation should not change the match.
+const sides = (l?: number, w?: number, h?: number, u: Unit = 'mm') =>
+  [toMM(l, u), toMM(w, u), toMM(h, u)].sort((a, b) => b - a);
+
+// Straight-line distance between two sets of sides, in mm.
+const gap = (a: number[], b: number[]) => Math.sqrt(a.reduce((sum, v, i) => sum + (v - b[i]) ** 2, 0));
+
+const magnitude = (a: number[]) => Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
 
 export const estimateLayer = (
   layer: PackagingLayer,
@@ -14,8 +23,8 @@ export const estimateLayer = (
     return { layerId: layer.id, estimatedWeightPerUnit: layer.knownWeight, totalWeight: layer.knownWeight * quantity, confidence: 'High' as ConfidenceLevel, method: 'Known packaging weight provided' };
   }
 
-  const productVolume = volume(productDimensions.length, productDimensions.width, productDimensions.height, productDimensions.unit);
-  if (!productVolume) {
+  const productSides = sides(productDimensions.length, productDimensions.width, productDimensions.height, productDimensions.unit);
+  if (!magnitude(productSides)) {
     return { layerId: layer.id, estimatedWeightPerUnit: 0, totalWeight: 0, confidence: 'Low' as ConfidenceLevel, method: 'Insufficient product dimensions for estimate', warning: 'Missing product dimensions.' };
   }
 
@@ -27,27 +36,32 @@ export const estimateLayer = (
     return { layerId: layer.id, estimatedWeightPerUnit: 0, totalWeight: 0, confidence: 'Low' as ConfidenceLevel, method: 'No matching reference material found', warning: `No references for ${layer.materialType}.` };
   }
 
-  const closest = pool.reduce((best, curr) => {
-    const diff = Math.abs(productVolume - volume(curr.length, curr.width, curr.height, curr.unit));
-    const bestDiff = Math.abs(productVolume - volume(best.length, best.width, best.height, best.unit));
-    return diff < bestDiff ? curr : best;
-  });
+  // Pick the reference whose dimensions sit closest to the product, then take its
+  // recorded weight exactly as it is. The reference weights come from measured
+  // packaging, so scaling them would invent a figure the source never supported.
+  const scored = pool.map((r) => ({ ref: r, distance: gap(productSides, sides(r.length, r.width, r.height, r.unit)) }));
+  const best = scored.reduce((a, b) => (b.distance < a.distance ? b : a));
+  const closest = best.ref;
 
-  // Scale the estimate by the product's size relative to the matched reference,
-  // so a bigger/smaller product doesn't just inherit the reference's flat
-  // weight. Volumes are unit-normalised to mm, so references entered in cm/m are
-  // handled correctly. Falls back to the reference weight if it has no volume.
-  const refVolume = volume(closest.length, closest.width, closest.height, closest.unit);
-  const scaled = refVolume ? closest.averageWeight * (productVolume / refVolume) : closest.averageWeight;
-  const estimatedWeightPerUnit = Math.round(scaled * 100) / 100;
+  const estimatedWeightPerUnit = closest.averageWeight;
+  // How far the match sits from the product, relative to the product's own size.
+  const drift = best.distance / magnitude(productSides);
+
+  let confidence: ConfidenceLevel = sameType.length ? 'Medium' : 'Low';
+  if (sameType.length && drift <= 0.1) confidence = 'High';
+
+  const warning = drift > 0.5
+    ? `Closest reference "${closest.referenceName}" is a very different size, so this estimate is rough. Add a closer reference or enter a known weight.`
+    : undefined;
 
   return {
     layerId: layer.id,
     estimatedWeightPerUnit,
     totalWeight: estimatedWeightPerUnit * quantity,
-    confidence: sameType.length ? 'Medium' as ConfidenceLevel : 'Low' as ConfidenceLevel,
-    method: `Estimated from "${closest.referenceName}" scaled to product size`,
+    confidence,
+    method: `Closest dimensions matched "${closest.referenceName}", weight used as recorded`,
     matchedReference: closest,
+    ...(warning ? { warning } : {}),
   };
 };
 
