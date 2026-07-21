@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MaterialType, PackagingType, ReferenceItem, Unit } from '@/types';
+import { MaterialType, PackagingType, ReferenceItem, SourceKind, Unit } from '@/types';
 import {
   addGlobalLibraryItem,
   addOwnLibraryItem,
@@ -21,6 +21,13 @@ const emptyForm: Omit<ReferenceItem, 'id' | 'densityValue'> = {
 const materials: MaterialType[] = ['Cardboard', 'Plastic', 'Paper', 'Glass', 'Aluminium', 'Steel', 'Wood', 'Other'];
 const dimSamples: Record<'length' | 'width' | 'height', number> = { length: 120, width: 90, height: 60 };
 
+// How each kind of source is badged next to the reference name.
+const sourceStyle: Record<SourceKind, { mark: string; label: string; chip: string }> = {
+  derived: { mark: 'ƒ', label: 'Calculated', chip: 'bg-sky-100 text-sky-800 border-sky-200' },
+  published: { mark: '✓', label: 'Published source', chip: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  estimate: { mark: '~', label: 'Estimate', chip: 'bg-amber-100 text-amber-800 border-amber-200' },
+};
+
 export default function PackagingLibraryPage() {
   const { user, isSuperadmin } = useAuth();
   const [view, setView] = useState<LibraryView>({ visible: [], hiddenDefaults: [], defaultIds: [] });
@@ -28,6 +35,7 @@ export default function PackagingLibraryPage() {
   const [addAsShared, setAddAsShared] = useState(false);
   const [q, setQ] = useState(''); const [material, setMaterial] = useState('');
   const [error, setError] = useState('');
+  const [sourceItem, setSourceItem] = useState<ReferenceItem | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -55,9 +63,23 @@ export default function PackagingLibraryPage() {
 
   const rowFor = (r: ReferenceItem) => {
     const isDefault = defaultIdSet.has(r.id);
+    const style = r.source ? sourceStyle[r.source.kind] : null;
     return (
       <tr key={r.id} className="border-t">
-        <td className="p-2">{r.referenceName}</td>
+        <td className="p-2">
+          {r.referenceName}
+          {style && (
+            <button
+              type="button"
+              onClick={() => setSourceItem(r)}
+              title={`${style.label} — click to see where this weight came from`}
+              aria-label={`${style.label}. Where this weight came from`}
+              className={`ml-1.5 align-super inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold leading-none hover:opacity-80 ${style.chip}`}
+            >
+              {style.mark}
+            </button>
+          )}
+        </td>
         <td className="text-center">{isDefault ? <span className="text-xs bg-slate-100 rounded px-2 py-0.5">Shared</span> : <span className="text-xs bg-emerald-100 text-emerald-800 rounded px-2 py-0.5">Mine</span>}</td>
         <td className="text-center">{r.materialType}</td>
         <td className="text-center whitespace-nowrap">{r.length}×{r.width}×{r.height} {r.unit}</td>
@@ -105,6 +127,16 @@ export default function PackagingLibraryPage() {
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold">Packaging Library</h2>
       <p className="text-sm text-slate-500">Shared defaults are visible to everyone. Items you add are private to you. You can hide defaults you don't need and restore them anytime.</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+        <span>The mark next to a name says where its weight came from:</span>
+        {(Object.keys(sourceStyle) as SourceKind[]).map((k) => (
+          <span key={k} className="inline-flex items-center gap-1.5">
+            <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold leading-none ${sourceStyle[k].chip}`}>{sourceStyle[k].mark}</span>
+            {sourceStyle[k].label}
+          </span>
+        ))}
+        <span className="text-slate-400">Click a mark for the detail.</span>
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="bg-white rounded-xl p-4 shadow space-y-3">
@@ -167,6 +199,49 @@ export default function PackagingLibraryPage() {
           </div>
         );
       })}
+
+      {sourceItem?.source && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSourceItem(null)}
+        >
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-slate-800">{sourceItem.referenceName}</h3>
+                <p className="text-xs text-slate-500">
+                  {sourceItem.materialType} · {sourceItem.packagingType} · {sourceItem.length}×{sourceItem.width}×{sourceItem.height} {sourceItem.unit} · {kgValue(sourceItem.averageWeight)} kg
+                </p>
+              </div>
+              <button className="text-slate-400 hover:text-slate-700 text-xl leading-none" onClick={() => setSourceItem(null)} aria-label="Close">×</button>
+            </div>
+
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${sourceStyle[sourceItem.source.kind].chip}`}>
+              <span className="font-bold">{sourceStyle[sourceItem.source.kind].mark}</span>
+              {sourceStyle[sourceItem.source.kind].label}
+            </span>
+
+            <p className="text-sm font-medium text-slate-800">{sourceItem.source.summary}</p>
+            <p className="text-sm text-slate-600 leading-relaxed">{sourceItem.source.detail}</p>
+
+            {sourceItem.source.url && (
+              <p className="text-sm">
+                <a href={sourceItem.source.url} target="_blank" rel="noopener noreferrer" className="text-eco underline">
+                  {sourceItem.source.publisher ?? 'Source'}
+                </a>
+              </p>
+            )}
+
+            {sourceItem.source.kind === 'estimate' && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                EPR submissions need real weights in kilograms, with evidence kept for seven years. Use this figure to get started, then replace it with your supplier's specification.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {view.hiddenDefaults.length > 0 && (
         <div className="bg-white rounded-xl shadow p-4 space-y-2">

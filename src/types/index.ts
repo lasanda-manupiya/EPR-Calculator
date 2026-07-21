@@ -35,6 +35,25 @@ export interface PackagingLayer extends Dimensions {
   warnings: string[];
 }
 
+/**
+ * Where a reference weight came from. EPR submissions need evidence kept for
+ * seven years, so every shared item says which of these it is.
+ *   derived   - calculated from the dimensions, so it can be recomputed
+ *   published - taken from a named published figure
+ *   estimate  - a sensible starting figure with no published source behind it
+ */
+export type SourceKind = 'derived' | 'published' | 'estimate';
+
+export interface ReferenceSource {
+  kind: SourceKind;
+  /** One line the user reads first. */
+  summary: string;
+  /** The method, the published figure, or what the estimate assumes. */
+  detail: string;
+  publisher?: string;
+  url?: string;
+}
+
 export interface ReferenceItem {
   id: string;
   referenceName: string;
@@ -47,6 +66,8 @@ export interface ReferenceItem {
   averageWeight: number;
   densityValue: number;
   notes: string;
+  /** Absent on items a user added themselves. */
+  source?: ReferenceSource;
 }
 
 export interface Product {
